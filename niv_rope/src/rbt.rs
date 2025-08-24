@@ -1,5 +1,5 @@
-type NodeId = u32;
-const NIL: NodeId = u32::MAX;
+type NodeId = u64;
+const NIL: NodeId = u64::MAX;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -8,7 +8,25 @@ enum Color {
     Black,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
+pub enum RBError {
+    TreeEmpty,
+    TreeFull,
+    KeyNotFound,
+    KeyAlreadyExists,
+}
+impl std::fmt::Display for RBError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RBError::TreeFull => write!(f, "Tree is full"),
+            RBError::TreeEmpty => write!(f, "Tree is empty"),
+            RBError::KeyNotFound => write!(f, "Key not found"),
+            RBError::KeyAlreadyExists => write!(f, "Key already exists"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct Node {
     left: NodeId,
     right: NodeId,
@@ -29,7 +47,7 @@ impl Node {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RBTree {
     root: NodeId,
     nodes: Vec<Node>,
@@ -43,9 +61,12 @@ impl RBTree {
         }
     }
 
-    pub fn insert(&mut self, key: u64) -> Result<(), &'static str> {
+    pub fn insert(&mut self, key: u64) -> Result<(), RBError> {
         let new_node = Node::new(key);
         let new_id = self.nodes.len() as NodeId;
+        if new_id == NIL {
+            return Err(RBError::TreeFull);
+        }
         self.nodes.push(new_node);
 
         if self.root == NIL {
