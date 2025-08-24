@@ -4,3 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+niv_rope = { version = "0.1.0", path="./niv_rope" }
+
+[lints.clippy]
+unwrap_used = "deny"
+cognitive_complexity = "deny"
+
+
+[workspace]
+members = [
+    "niv_rope",
+    "niv_lsp",
+]
