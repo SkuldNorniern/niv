@@ -262,6 +262,11 @@ impl RBRope {
     }
 
     pub fn insert(&mut self, key: u64) -> Result<(), RBError> {
+        let _ = self.insert_with_id(key)?;
+        Ok(())
+    }
+
+    pub fn insert_with_id(&mut self, key: u64) -> Result<NodeId, RBError> {
         let new_node = Node::new(key);
         let new_id = self.nodes.len() as NodeId;
         if new_id == NIL {
@@ -272,7 +277,7 @@ impl RBRope {
         if self.root == NIL {
             self.root = new_id;
             self.nodes[new_id as usize].color = Color::Black;
-            return Ok(());
+            return Ok(new_id);
         }
 
         // Perform standard BST insertion
@@ -303,7 +308,7 @@ impl RBRope {
 
         // Fix Red-Black properties
         self.insert_fixup(new_id);
-        Ok(())
+        Ok(new_id)
     }
 
     fn insert_fixup(&mut self, mut node_id: NodeId) {
@@ -441,11 +446,13 @@ impl RBRope {
     }
 
     pub fn len(&self) -> usize {
-        if self.root == NIL { return 0; }
-        match &self.nodes[self.root as usize].payload {
-            Payload::Leaf(l) => l.byte_len(),
-            Payload::Branch => 0,
+        let mut total = 0usize;
+        for node in &self.nodes {
+            if let Payload::Leaf(l) = &node.payload {
+                total += l.byte_len();
+            }
         }
+        total
     }
 
     pub fn insert_bytes(&mut self, off: usize, data: &[u8]) -> Result<usize, RBError> {
@@ -463,6 +470,222 @@ impl RBRope {
             Payload::Leaf(l) => l.read_into(off, out),
             Payload::Branch => Ok(0),
         }
+    }
+
+    pub fn visualize(&self) {
+        if self.root == NIL {
+            println!("<empty rope>");
+            return;
+        }
+        println!("Rope visualization:");
+        self.visualize_node(self.root, 0);
+    }
+
+    pub fn visualize_limited(&self, max_depth: usize) {
+        if self.root == NIL {
+            println!("<empty rope>");
+            return;
+        }
+        println!("Rope visualization (max_depth={}):", max_depth);
+        self.visualize_node_limited(self.root, 0, max_depth);
+    }
+
+    fn min_node(&self, mut n: NodeId) -> NodeId {
+        if n == NIL { return NIL; }
+        while self.nodes[n as usize].left != NIL { n = self.nodes[n as usize].left; }
+        n
+    }
+
+    fn successor(&self, mut n: NodeId) -> NodeId {
+        if n == NIL { return NIL; }
+        let right = self.nodes[n as usize].right;
+        if right != NIL { return self.min_node(right); }
+        let mut p = self.nodes[n as usize].parent;
+        while p != NIL && n == self.nodes[p as usize].right { n = p; p = self.nodes[p as usize].parent; }
+        p
+    }
+
+    pub fn read_bytes_global(&self, mut off: usize, out: &mut [u8]) -> Result<usize, RBError> {
+        let mut written = 0usize;
+        let mut cur = self.min_node(self.root);
+        let mut skip = off;
+        while cur != NIL && written < out.len() {
+            match &self.nodes[cur as usize].payload {
+                Payload::Leaf(l) => {
+                    let ll = l.byte_len();
+                    if skip >= ll { skip -= ll; }
+                    else {
+                        let want = core::cmp::min(out.len() - written, ll - skip);
+                        let w = l.read_into(skip, &mut out[written..written + want])?;
+                        written += w;
+                        skip = 0;
+                    }
+                }
+                Payload::Branch => {}
+            }
+            cur = self.successor(cur);
+        }
+        Ok(written)
+    }
+
+    pub fn find_first(&self, needle: &[u8]) -> Option<usize> {
+        if needle.is_empty() { return Some(0); }
+        // Build contiguous buffer (OK for demos/tests)
+        let mut all: Vec<u8> = Vec::new();
+        let mut cur = self.min_node(self.root);
+        while cur != NIL {
+            if let Payload::Leaf(l) = &self.nodes[cur as usize].payload {
+                let mut tmp = vec![0u8; l.byte_len()];
+                let _ = l.read_into(0, &mut tmp).ok()?;
+                all.extend_from_slice(&tmp);
+            }
+            cur = self.successor(cur);
+        }
+        if all.len() < needle.len() { return None; }
+        let last = all.len() - needle.len();
+        let mut i = 0usize;
+        while i <= last {
+            if &all[i..i + needle.len()] == needle { return Some(i); }
+            i += 1;
+        }
+        None
+    }
+
+    pub fn replace_first_same_len(&mut self, needle: &[u8], replacement: &[u8]) -> Result<bool, RBError> {
+        if needle.is_empty() { return Ok(false); }
+        if needle.len() != replacement.len() { return Ok(false); }
+        let Some(mut global_off) = self.find_first(needle) else { return Ok(false); };
+        // Walk leaves to locate the one containing the occurrence
+        let mut cur = self.min_node(self.root);
+        while cur != NIL {
+            let node_idx = cur as usize;
+            let is_replaced = match &mut self.nodes[node_idx].payload {
+                Payload::Leaf(l) => {
+                    let ll = l.byte_len();
+                    if global_off >= ll { global_off -= ll; false }
+                    else {
+                        // Replace by delete+insert to honor gap buffer
+                        let del = l.delete(global_off, needle.len())?;
+                        if del != needle.len() { return Ok(false); }
+                        let ins = l.insert(global_off, replacement)?;
+                        if ins != replacement.len() { return Ok(false); }
+                        true
+                    }
+                }
+                Payload::Branch => false,
+            };
+            if is_replaced { return Ok(true); }
+            cur = self.successor(cur);
+        }
+        Ok(false)
+    }
+
+    fn visualize_node(&self, node_id: NodeId, depth: usize) {
+        if node_id == NIL { return; }
+        let node = &self.nodes[node_id as usize];
+        let indent = "  ".repeat(depth);
+        let color = match node.color { Color::Red => 'R', Color::Black => 'B' };
+        match &node.payload {
+            Payload::Leaf(l) => {
+                println!(
+                    "{}[{}] key={} Leaf(bytes={}, lines={}) (left={}, right={})",
+                    indent,
+                    color,
+                    node.key,
+                    l.byte_len(),
+                    l.nl_idx.len(),
+                    node.left,
+                    node.right
+                );
+            }
+            Payload::Branch => {
+                println!(
+                    "{}[{}] key={} Branch (left={}, right={})",
+                    indent,
+                    color,
+                    node.key,
+                    node.left,
+                    node.right
+                );
+            }
+        }
+        if node.left != NIL { self.visualize_node(node.left, depth + 1); }
+        if node.right != NIL { self.visualize_node(node.right, depth + 1); }
+    }
+
+    fn visualize_node_limited(&self, node_id: NodeId, depth: usize, max_depth: usize) {
+        if node_id == NIL { return; }
+        if depth > max_depth { return; }
+        let node = &self.nodes[node_id as usize];
+        let indent = "  ".repeat(depth);
+        let color = match node.color { Color::Red => 'R', Color::Black => 'B' };
+        match &node.payload {
+            Payload::Leaf(l) => {
+                println!(
+                    "{}[{}] key={} Leaf(bytes={}, lines={}) (left={}, right={})",
+                    indent,
+                    color,
+                    node.key,
+                    l.byte_len(),
+                    l.nl_idx.len(),
+                    node.left,
+                    node.right
+                );
+            }
+            Payload::Branch => {
+                println!(
+                    "{}[{}] key={} Branch (left={}, right={})",
+                    indent,
+                    color,
+                    node.key,
+                    node.left,
+                    node.right
+                );
+            }
+        }
+        if depth == max_depth { return; }
+        if node.left != NIL { self.visualize_node_limited(node.left, depth + 1, max_depth); }
+        if node.right != NIL { self.visualize_node_limited(node.right, depth + 1, max_depth); }
+    }
+
+    pub fn build_from_bytes(&mut self, data: &[u8]) -> Result<usize, RBError> {
+        // Reset tree
+        self.root = NIL;
+        self.nodes.clear();
+
+        let mut inserted_total = 0usize;
+        let mut key: u64 = 0;
+        while inserted_total < data.len() {
+            let remaining = data.len() - inserted_total;
+            let take = if remaining > LEAF_MAX_SIZE { LEAF_MAX_SIZE } else { remaining };
+            let new_id = self.insert_with_id(key)?;
+            key = key.saturating_add(1);
+            if let Payload::Leaf(ref mut leaf) = self.nodes[new_id as usize].payload {
+                let wrote = leaf.insert(0, &data[inserted_total..inserted_total + take])?;
+                inserted_total += wrote;
+            }
+        }
+        Ok(inserted_total)
+    }
+
+    pub fn count_leaves(&self) -> usize {
+        let mut count = 0usize;
+        for node in &self.nodes {
+            if matches!(node.payload, Payload::Leaf(_)) {
+                count += 1;
+            }
+        }
+        count
+    }
+
+    pub fn count_branches(&self) -> usize {
+        let mut count = 0usize;
+        for node in &self.nodes {
+            if matches!(node.payload, Payload::Branch) {
+                count += 1;
+            }
+        }
+        count
     }
 
     #[cfg(test)]
@@ -674,5 +897,20 @@ mod tests {
         let read = tree.read_bytes(0, &mut out).expect("read root failed");
         assert_eq!(read, LEAF_MAX_SIZE);
         assert_eq!(&out[..], &long_data[..LEAF_MAX_SIZE]);
+    }
+
+    #[test]
+    fn test_rbrope_build_from_bytes_many_branches() {
+        let mut tree = RBRope::new();
+        // Build ~10 * LEAF_MAX_SIZE bytes
+        let mut data: Vec<u8> = Vec::new();
+        while data.len() < (LEAF_MAX_SIZE * 10) {
+            data.extend_from_slice(b"abcdefghi\n");
+        }
+        let expected_len = data.len();
+        let wrote = tree.build_from_bytes(&data).expect("build_from_bytes failed");
+        assert_eq!(wrote, expected_len);
+        assert!(tree.count_leaves() >= 10);
+        assert_eq!(tree.len(), expected_len);
     }
 }
