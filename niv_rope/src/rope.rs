@@ -8,6 +8,7 @@ use crate::rbt_chunk::RBError;
 pub type NodeId = u64;
 pub const NIL: NodeId = u64::MAX;
 pub const LEAF_CAPACITY: usize = 2048; // maximum bytes in a leaf buffer
+pub const LEAF_USABLE: usize = (LEAF_CAPACITY * 80) / 100; // 80% of capacity (1638 bytes) for actual content
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -185,7 +186,7 @@ impl Rope {
         let mut key: u64 = 0;
         while inserted_total < data.len() {
             let remaining = data.len() - inserted_total;
-            let take = if remaining > LEAF_CAPACITY { LEAF_CAPACITY } else { remaining };
+            let take = if remaining > LEAF_USABLE { LEAF_USABLE } else { remaining };
             let new_id = self.insert_with_id(key)?;
             key = key.saturating_add(1);
             let leaf = match &mut self.nodes[new_id as usize].payload { Payload::Leaf(l) => l };
@@ -233,10 +234,9 @@ impl Rope {
         None
     }
 
-    pub fn replace_first_same_len(&mut self, needle: &[u8], replacement: &[u8]) -> Result<bool, RBError> {
-        if needle.is_empty() { return Ok(false); }
-        if needle.len() != replacement.len() { return Ok(false); }
-        let Some(mut global_off) = self.find_first(needle) else { return Ok(false) };
+    pub fn replace_first(&mut self, needle: &[u8], replacement: &[u8]) -> Result<usize, RBError> {
+        if needle.is_empty() { return Ok(0); }
+        let Some(mut global_off) = self.find_first(needle) else { return Ok(0); };
         let mut cur = self.min_node(self.root);
         while cur != NIL {
             let idx = cur as usize;
@@ -245,17 +245,17 @@ impl Rope {
                     let ll = l.byte_len();
                     if global_off >= ll { global_off -= ll; false } else {
                         let del = l.delete(global_off, needle.len())?;
-                        if del != needle.len() { return Ok(false); }
+                        if del != needle.len() { return Ok(0); }
                         let ins = l.insert(global_off, replacement)?;
-                        if ins != replacement.len() { return Ok(false); }
+                        if ins != replacement.len() { return Ok(0); }
                         true
                     }
                 }
             };
-            if replaced { return Ok(true); }
+            if replaced { return Ok(replacement.len()); }
             cur = self.successor(cur);
         }
-        Ok(false)
+        Ok(0)
     }
 
     // Tree operations (BST + RB insert/rotations)
