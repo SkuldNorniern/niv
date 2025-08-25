@@ -180,6 +180,37 @@ impl Rope {
         total
     }
 
+    pub fn total_lines(&self) -> usize {
+        if self.root == NIL { 0 } else { self.nodes[self.root as usize].sub_lines as usize }
+    }
+
+    // Recompute this node's subtree aggregates from its children and own leaf
+    #[inline]
+    fn recompute_node_aggregates(&mut self, node_id: NodeId) {
+        if node_id == NIL { return; }
+        let idx = node_id as usize;
+        let left = self.nodes[idx].left;
+        let right = self.nodes[idx].right;
+        let left_bytes = if left == NIL { 0 } else { self.nodes[left as usize].sub_bytes as usize };
+        let right_bytes = if right == NIL { 0 } else { self.nodes[right as usize].sub_bytes as usize };
+        let left_lines = if left == NIL { 0 } else { self.nodes[left as usize].sub_lines as usize };
+        let right_lines = if right == NIL { 0 } else { self.nodes[right as usize].sub_lines as usize };
+        let own = match &self.nodes[idx].payload { Payload::Leaf(l) => l.byte_len() };
+        let own_lines = match &self.nodes[idx].payload { Payload::Leaf(l) => l.nl_idx.len() };
+        self.nodes[idx].sub_bytes = (left_bytes + own + right_bytes) as u64;
+        self.nodes[idx].sub_lines = (left_lines + own_lines + right_lines) as u64;
+    }
+
+    // Update aggregates from this node up to the root
+    #[inline]
+    fn update_ancestors(&mut self, mut node_id: NodeId) {
+        let mut cur = node_id;
+        while cur != NIL {
+            self.recompute_node_aggregates(cur);
+            cur = self.nodes[cur as usize].parent;
+        }
+    }
+
     pub fn build_from_bytes(&mut self, data: &[u8]) -> Result<usize, RBError> {
         self.root = NIL; self.nodes.clear();
         let mut inserted_total = 0usize;
@@ -192,6 +223,8 @@ impl Rope {
             let leaf = match &mut self.nodes[new_id as usize].payload { Payload::Leaf(l) => l };
             let wrote = leaf.insert(0, &data[inserted_total..inserted_total + take])?;
             inserted_total += wrote;
+            // Update aggregates for this new leaf up to root
+            self.update_ancestors(new_id);
         }
         Ok(inserted_total)
     }
@@ -244,11 +277,21 @@ impl Rope {
                 Payload::Leaf(l) => {
                     let ll = l.byte_len();
                     if global_off >= ll { global_off -= ll; false } else {
-                        let del = l.delete(global_off, needle.len())?;
-                        if del != needle.len() { return Ok(0); }
-                        let ins = l.insert(global_off, replacement)?;
-                        if ins != replacement.len() { return Ok(0); }
-                        true
+                        // Check if replacement fits in current leaf
+                        let available = LEAF_CAPACITY - ll;
+                        if replacement.len() <= available {
+                            // Simple replacement within leaf capacity
+                            let del = l.delete(global_off, needle.len())?;
+                            if del != needle.len() { return Ok(0); }
+                            let ins = l.insert(global_off, replacement)?;
+                            if ins != replacement.len() { return Ok(0); }
+                            // Update subtree aggregates from this node upward
+                            self.update_ancestors(cur);
+                            true
+                        } else {
+                            // Need to restructure tree - split leaf
+                            self.restructure_leaf_for_replacement(cur, global_off, needle, replacement)?
+                        }
                     }
                 }
             };
