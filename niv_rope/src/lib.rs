@@ -1,5 +1,5 @@
 mod rbt;
 mod rbt_chunk;
-mod tinyvec;
+// tinyvec removed
 
 pub use rbt::RBTree;
