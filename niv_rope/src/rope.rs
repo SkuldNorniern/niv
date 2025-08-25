@@ -258,6 +258,18 @@ impl Rope {
         Ok(0)
     }
 
+    fn restructure_leaf_for_replacement(&mut self, leaf_id: NodeId, offset: usize, needle: &[u8], replacement: &[u8]) -> Result<bool, RBError> {
+        // FEAT:TODO: Missing tree restructuring for leaf overflow
+        // This method should:
+        // 1. Split the overflowing leaf into multiple leaves
+        // 2. Redistribute content to fit within capacity limits  
+        // 3. Update tree structure (parent/child relationships)
+        // 4. Maintain Red-Black tree properties (colors, balance)
+        // 5. Update metadata (sub_bytes, sub_lines counts)
+        // 6. Handle cross-leaf content coordination
+        !todo!("Tree restructuring not yet implemented - leaf overflow at offset {} with {} byte replacement", offset, replacement.len());
+    }
+
     // Tree operations (BST + RB insert/rotations)
     pub fn insert(&mut self, key: u64) -> Result<(), RBError> { let _ = self.insert_with_id(key)?; Ok(()) }
 
@@ -348,6 +360,18 @@ impl Rope {
         if node.left != NIL { self.visualize_node(node.left, depth + 1); }
         if node.right != NIL { self.visualize_node(node.right, depth + 1); }
     }
+
+    // FEAT:TODO: Missing advanced rope operations
+    // 1. delete_range(start, end) - Remove text range with tree rebalancing
+    // 2. insert_at(offset, text) - Insert text at specific offset
+    // 3. undo() / redo() - History management for text operations
+    // 4. optimize() - Rebalance tree for better performance
+    // 5. merge_leaves() - Combine underutilized leaves
+    // 6. split_leaf_at(offset) - Split leaf at specific position
+    // 7. get_line_info(offset) - Get line number and column for offset
+    // 8. find_all(needle) - Find all occurrences of text
+    // 9. replace_all(needle, replacement) - Replace all occurrences
+    // 10. copy_range(start, end) - Copy text range to new rope
 }
 
 #[cfg(test)]
