@@ -427,6 +427,91 @@ impl Rope {
     // 10. copy_range(start, end) - Copy text range to new rope
 }
 
+impl<'a> Iterator for RopeSlice<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_offset >= self.end {
+            return None;
+        }
+
+        // Find the leaf containing current_offset
+        let mut node = self.current_node;
+        let mut offset_in_rope = 0;
+
+        // Navigate to the correct leaf
+        while node != NIL {
+            let node_idx = node as usize;
+            let left_bytes = if self.rope.nodes[node_idx].left != NIL {
+                self.rope.nodes[self.rope.nodes[node_idx].left as usize].sub_bytes as usize
+            } else {
+                0
+            };
+
+            if offset_in_rope + left_bytes > self.current_offset {
+                // Go left
+                node = self.rope.nodes[node_idx].left;
+            } else {
+                offset_in_rope += left_bytes;
+                let own_bytes = match &self.rope.nodes[node_idx].payload {
+                    Payload::Leaf(l) => l.byte_len(),
+                };
+
+                if offset_in_rope + own_bytes > self.current_offset {
+                    // This is the correct leaf
+                    break;
+                } else {
+                    // Go right
+                    offset_in_rope += own_bytes;
+                    node = self.rope.nodes[node_idx].right;
+                }
+            }
+        }
+
+        if node == NIL {
+            return None;
+        }
+
+        // Extract slice from this leaf - zero-copy approach
+        let Payload::Leaf(leaf) = &self.rope.nodes[node as usize].payload;
+        let leaf_start = (self.current_offset - offset_in_rope).min(leaf.byte_len());
+        let leaf_end = (self.end - offset_in_rope).min(leaf.byte_len());
+
+        if leaf_start >= leaf_end {
+            // Move to next leaf
+            self.current_node = self.rope.successor(node);
+            return self.next();
+        }
+
+        let slice_len = leaf_end - leaf_start;
+        let gl = leaf.gap_lo();
+        let gh = leaf.gap_hi();
+
+        // Calculate the actual slice from the buffer, accounting for the gap
+        let slice_start = if leaf_start < gl {
+            leaf_start
+        } else {
+            leaf_start + (gh - gl)
+        };
+
+        let slice_end = if leaf_end <= gl {
+            leaf_end
+        } else {
+            leaf_end + (gh - gl)
+        };
+
+        self.current_offset += slice_len;
+
+        // Update current_node for next iteration
+        if self.current_offset >= leaf_end + offset_in_rope {
+            self.current_node = self.rope.successor(node);
+        }
+
+        // Return the slice directly from the buffer - this is zero-copy
+        Some(&leaf.buf()[slice_start..slice_end])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -539,5 +624,68 @@ mod tests {
         let mut buf = vec![0u8; 123];
         let r = rope.read_bytes_global(start, &mut buf).expect("read");
         assert_eq!(&buf[..r], &data[start..start + r]);
+    }
+
+    #[test]
+    fn rope_slice_iterator_zero_copy() {
+        let mut rope = Rope::new();
+        let data = b"Hello World\nThis is a test\nWith multiple lines";
+        let _ = rope.build_from_bytes(data).expect("build");
+
+        // Test full slice iteration
+        let slice = rope.slice(0, data.len());
+        let mut collected = Vec::new();
+        for chunk in slice {
+            collected.extend_from_slice(chunk);
+        }
+        assert_eq!(collected, data);
+
+        // Test partial slice iteration
+        let slice = rope.slice(6, 18); // "World\nThis is"
+        let mut collected = Vec::new();
+        for chunk in slice {
+            collected.extend_from_slice(chunk);
+        }
+        assert_eq!(collected, &data[6..18]);
+    }
+
+    #[test]
+    fn rope_slice_iterator_single_leaf() {
+        let mut rope = Rope::new();
+        let data = b"Hello World\nThis is a test\nWith multiple lines";
+        let _ = rope.build_from_bytes(data).expect("build");
+
+        // Test partial slice within a single leaf
+        let slice = rope.slice(6, 25); // "World\nThis is a t"
+        let mut collected = Vec::new();
+        for chunk in slice {
+            collected.extend_from_slice(chunk);
+        }
+        assert_eq!(collected, &data[6..25]);
+
+        // Should get exactly one chunk since it's within a single leaf
+        let slice = rope.slice(6, 25);
+        let chunk_count = slice.count();
+        assert_eq!(chunk_count, 1, "Expected single chunk within leaf, got {}", chunk_count);
+    }
+
+    #[test]
+    fn rope_slice_iterator_bounds() {
+        let mut rope = Rope::new();
+        let data = b"Short text";
+        let _ = rope.build_from_bytes(data).expect("build");
+
+        // Test out of bounds handling
+        let slice = rope.slice(5, 20); // Should clamp to valid range
+        let mut collected = Vec::new();
+        for chunk in slice {
+            collected.extend_from_slice(chunk);
+        }
+        assert_eq!(collected, &data[5..]); // Should get from offset 5 to end
+
+        // Test empty slice
+        let slice = rope.slice(5, 5);
+        let chunk_count = slice.count();
+        assert_eq!(chunk_count, 0);
     }
 }
