@@ -358,6 +358,8 @@ impl Rope {
             }
         }
         self.nodes[self.root as usize].color = Color::Black;
+        // After structural changes, update aggregates from the affected node upward
+        self.update_ancestors(n);
     }
 
     fn left_rotate(&mut self, x: NodeId) {
@@ -366,6 +368,10 @@ impl Rope {
         self.nodes[y as usize].parent = x_parent;
         if x == self.root { self.root = y; } else if x == self.nodes[x_parent as usize].left { self.nodes[x_parent as usize].left = y; } else { self.nodes[x_parent as usize].right = y; }
         self.nodes[y as usize].left = x; self.nodes[x as usize].parent = y;
+        // Recompute aggregates bottom-up for x then y, then up to root from y
+        self.recompute_node_aggregates(x);
+        self.recompute_node_aggregates(y);
+        self.update_ancestors(self.nodes[y as usize].parent);
     }
 
     fn right_rotate(&mut self, y: NodeId) {
@@ -374,6 +380,10 @@ impl Rope {
         self.nodes[x as usize].parent = y_parent;
         if y == self.root { self.root = x; } else if y == self.nodes[y_parent as usize].right { self.nodes[y_parent as usize].right = x; } else { self.nodes[y_parent as usize].left = x; }
         self.nodes[x as usize].right = y; self.nodes[y as usize].parent = x;
+        // Recompute aggregates bottom-up for y then x, then up to root from x
+        self.recompute_node_aggregates(y);
+        self.recompute_node_aggregates(x);
+        self.update_ancestors(self.nodes[x as usize].parent);
     }
 
     fn min_node(&self, mut n: NodeId) -> NodeId { if n == NIL { return NIL; } while self.nodes[n as usize].left != NIL { n = self.nodes[n as usize].left; } n }
