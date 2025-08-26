@@ -2,6 +2,14 @@
 //!
 //! This crate provides filesystem operations with proper encoding detection,
 //! atomic writes, and external change detection.
+//!
+//! ## Encoding Detection
+//!
+//! The crate supports comprehensive encoding detection including:
+//! - **Unicode encodings**: UTF-8, UTF-16 (LE/BE), UTF-32 (LE/BE) with BOM detection
+//! - **Latin encodings**: Latin-1 (ISO-8859-1), Windows-1252, Latin-9 (ISO-8859-15)
+//! - **Binary detection**: Identifies binary files and prevents corruption
+//! - **Heuristic analysis**: Smart detection of encodings without BOM markers
 
 use std::io;
 use std::fmt;
@@ -19,6 +27,12 @@ pub enum Encoding {
     Utf32Le,
     /// UTF-32 Big Endian
     Utf32Be,
+    /// Latin-1 (ISO-8859-1) encoding
+    Latin1,
+    /// Windows-1252 encoding (common on Windows)
+    Windows1252,
+    /// Latin-9 (ISO-8859-15) encoding
+    Latin9,
     /// Unknown encoding (may be binary or unsupported encoding)
     Unknown,
 }
@@ -31,6 +45,9 @@ impl fmt::Display for Encoding {
             Encoding::Utf16Be => write!(f, "Utf16Be"),
             Encoding::Utf32Le => write!(f, "Utf32Le"),
             Encoding::Utf32Be => write!(f, "Utf32Be"),
+            Encoding::Latin1 => write!(f, "Latin1"),
+            Encoding::Windows1252 => write!(f, "Windows1252"),
+            Encoding::Latin9 => write!(f, "Latin9"),
             Encoding::Unknown => write!(f, "Unknown"),
         }
     }
@@ -263,6 +280,11 @@ pub fn detect_encoding_heuristic(bytes: &[u8], config: DetectionConfig) -> Encod
         return Ok(Encoding::Utf8);
     }
 
+    // Check for Latin encodings (invalid UTF-8 but valid extended ASCII)
+    if let Some(latin_encoding) = detect_latin_encoding(sample) {
+        return Ok(latin_encoding);
+    }
+
     // If we can't determine the encoding but it doesn't look binary,
     // assume UTF-8 as fallback
     Ok(Encoding::Utf8)
@@ -308,6 +330,72 @@ fn is_valid_utf8(bytes: &[u8]) -> bool {
     true
 }
 
+/// Detect Latin encoding patterns in the given byte slice
+///
+/// Analyzes byte patterns to detect Latin-1, Windows-1252, or Latin-9 encodings.
+/// Returns None if no Latin encoding patterns are detected.
+///
+/// # Arguments
+/// * `bytes` - Byte slice to analyze
+///
+/// # Returns
+/// Some(Encoding) if a Latin encoding is detected, None otherwise
+fn detect_latin_encoding(bytes: &[u8]) -> Option<Encoding> {
+    if bytes.len() < 10 {
+        return None;
+    }
+
+    let mut extended_ascii_count = 0;
+    let mut windows1252_chars = 0;
+    let mut latin9_chars = 0;
+    let mut latin1_chars = 0;
+
+    // Common character byte values for different encodings
+    for &byte in bytes {
+        if byte >= 0x80 {
+            extended_ascii_count += 1;
+
+            // Windows-1252 specific characters (common in Western European text)
+            // 0x80-0x9F range contains Windows-1252 specific characters
+            if byte >= 0x80 && byte <= 0x9F {
+                windows1252_chars += 1;
+            }
+
+            // Latin-9 specific characters (includes euro symbol, etc.)
+            match byte {
+                0xA4 | 0xA6 | 0xA8 | 0xB4 | 0xB8 | 0xBC | 0xBD | 0xBE => {
+                    // These are more common in Latin-9/Latin-1
+                    latin9_chars += 1;
+                }
+                0xA0..=0xBF => {
+                    // General extended characters
+                    latin1_chars += 1;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let extended_ratio = extended_ascii_count as f64 / bytes.len() as f64;
+
+    // Need at least 5% extended ASCII characters to consider Latin encoding
+    if extended_ratio < 0.05 {
+        return None;
+    }
+
+    // Determine the most likely encoding based on character patterns
+    if windows1252_chars > latin9_chars && windows1252_chars > latin1_chars {
+        // High ratio of Windows-1252 specific characters
+        Some(Encoding::Windows1252)
+    } else if latin9_chars > windows1252_chars && latin9_chars > latin1_chars {
+        // High ratio of Latin-9 specific characters
+        Some(Encoding::Latin9)
+    } else {
+        // Default to Latin-1 for general extended ASCII
+        Some(Encoding::Latin1)
+    }
+}
+
 /// Detect the encoding of a file from its byte content
 ///
 /// This function first attempts BOM detection, and if no BOM is found,
@@ -324,9 +412,15 @@ fn is_valid_utf8(bytes: &[u8]) -> bool {
 /// ```rust
 /// use niv_fs::{detect_encoding, DetectionConfig, Encoding};
 ///
+/// // UTF-8 content
 /// let content = b"Hello, world!";
 /// let encoding = detect_encoding(content, None).unwrap();
 /// assert_eq!(encoding, Encoding::Utf8);
+///
+/// // Latin-1 content with accented characters
+/// let latin1_content = b"Hello, caf\xE9!"; // café in Latin-1
+/// let encoding = detect_encoding(latin1_content, None).unwrap();
+/// assert_eq!(encoding, Encoding::Latin1);
 /// ```
 pub fn detect_encoding(bytes: &[u8], config: Option<DetectionConfig>) -> EncodingResult<Encoding> {
     let config = config.unwrap_or_default();
@@ -555,9 +649,61 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_encoding_heuristic_latin1() {
+        // Create Latin-1 content with extended ASCII characters
+        let mut content = b"Hello, world! ".to_vec();
+        // Add common Latin-1 characters (0xA0 = non-breaking space, 0xE9 = é, etc.)
+        content.extend_from_slice(&[0xA0, 0xE9, 0xE0, 0xE8, 0xF1, 0xFC]);
+        content.extend_from_slice(b" This is Latin-1 text with accented characters.");
+
+        let config = DetectionConfig::default();
+        let result = detect_encoding_heuristic(&content, config);
+        assert_eq!(result.unwrap(), Encoding::Latin1);
+    }
+
+    #[test]
+    fn test_detect_encoding_heuristic_windows1252() {
+        // Create Windows-1252 content with specific characters
+        let mut content = b"Hello, Windows ".to_vec();
+        // Add Windows-1252 specific characters (0x80-0x9F range)
+        content.extend_from_slice(&[0x80, 0x82, 0x83, 0x84, 0x85, 0x86]);
+        content.extend_from_slice(b" text with special characters.");
+
+        let config = DetectionConfig::default();
+        let result = detect_encoding_heuristic(&content, config);
+        assert_eq!(result.unwrap(), Encoding::Windows1252);
+    }
+
+    #[test]
+    fn test_detect_latin_encoding_empty() {
+        let content = [];
+        let result = detect_latin_encoding(&content);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_latin_encoding_ascii_only() {
+        let content = b"Hello, world! This is pure ASCII text.";
+        let result = detect_latin_encoding(content.as_slice());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_latin_encoding_few_extended() {
+        // Less than 5% extended ASCII, should not detect Latin encoding
+        let mut content = vec![0; 100];
+        content[95] = 0xE9; // Only 1 extended character out of 100
+        let result = detect_latin_encoding(content.as_slice());
+        assert!(result.is_none());
+    }
+
+    #[test]
     fn test_encoding_display() {
         assert_eq!(format!("{}", Encoding::Utf8), "Utf8");
         assert_eq!(format!("{}", Encoding::Utf16Le), "Utf16Le");
+        assert_eq!(format!("{}", Encoding::Latin1), "Latin1");
+        assert_eq!(format!("{}", Encoding::Windows1252), "Windows1252");
+        assert_eq!(format!("{}", Encoding::Latin9), "Latin9");
         assert_eq!(format!("{}", Encoding::Unknown), "Unknown");
     }
 
