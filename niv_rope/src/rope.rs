@@ -468,4 +468,76 @@ mod tests {
         // This just exercises the code path; output is manual-debug only
         rope.visualize();
     }
+
+    #[test]
+    fn rope_total_lines_basic() {
+        let mut rope = Rope::new();
+        let data = b"a\nb\nc\n"; // 3 newlines
+        let wrote = rope.build_from_bytes(data).expect("build");
+        assert_eq!(wrote, data.len());
+        assert_eq!(rope.len(), data.len());
+        assert_eq!(rope.total_lines(), 3);
+    }
+
+    #[test]
+    fn rope_read_global_across_leaves() {
+        let mut rope = Rope::new();
+        // Build content spanning multiple leaves
+        let line = b"0123456789abcdefghijklmnopqrstuvwxyz\n"; // 37 bytes including newline
+        let mut data: Vec<u8> = Vec::new();
+        while data.len() < LEAF_USABLE * 2 + 50 { data.extend_from_slice(line); }
+        let _ = rope.build_from_bytes(&data).expect("build");
+
+        // Read across the boundary between leaf 0 and 1
+        let start = LEAF_USABLE.saturating_sub(20);
+        let want = 80usize;
+        let mut out = vec![0u8; want];
+        let r = rope.read_bytes_global(start, &mut out).expect("read");
+        assert_eq!(&out[..r], &data[start..start + r]);
+    }
+
+    #[test]
+    fn rope_replace_var_len_updates_metadata() {
+        let mut rope = Rope::new();
+        // Two lines initially (2 newlines)
+        let data = b"abc\ndef\n"; // len 8, lines 2
+        let _ = rope.build_from_bytes(data).expect("build");
+        assert_eq!(rope.len(), 8);
+        assert_eq!(rope.total_lines(), 2);
+
+        // Replace "def" (3) with "d\ne\nf" (5), adding 2 newlines
+        let replaced = rope.replace_first(b"def", b"d\ne\nf").expect("replace");
+        assert_eq!(replaced, 5);
+        // Length increases by +2
+        assert_eq!(rope.len(), 10);
+        // Newline count increases by +2 (now 4)
+        assert_eq!(rope.total_lines(), 4);
+
+        // Verify content around replacement
+        let mut all = vec![0u8; rope.len()];
+        let _ = rope.read_bytes_global(0, &mut all).expect("read all");
+        let s = std::str::from_utf8(&all).unwrap_or("");
+        assert!(s.contains("abc\nd\ne\nf\n"));
+    }
+
+    #[test]
+    fn rope_metadata_consistency_large_build() {
+        let mut rope = Rope::new();
+        let mut data: Vec<u8> = Vec::new();
+        // Build 5000 lines
+        for i in 0..5000 {
+            let mut line = format!("line_{i}\n").into_bytes();
+            data.append(&mut line);
+        }
+        let _ = rope.build_from_bytes(&data).expect("build");
+        let expected_newlines = data.iter().filter(|&&b| b == b'\n').count();
+        assert_eq!(rope.len(), data.len());
+        assert_eq!(rope.total_lines(), expected_newlines);
+
+        // Spot-check a mid-range slice matches
+        let start = data.len() / 3;
+        let mut buf = vec![0u8; 123];
+        let r = rope.read_bytes_global(start, &mut buf).expect("read");
+        assert_eq!(&buf[..r], &data[start..start + r]);
+    }
 }
