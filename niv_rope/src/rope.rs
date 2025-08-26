@@ -203,7 +203,7 @@ impl Rope {
 
     // Update aggregates from this node up to the root
     #[inline]
-    fn update_ancestors(&mut self, mut node_id: NodeId) {
+    fn update_ancestors(&mut self, node_id: NodeId) {
         let mut cur = node_id;
         while cur != NIL {
             self.recompute_node_aggregates(cur);
