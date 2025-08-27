@@ -44,3 +44,5 @@ pub fn detect_latin_encoding(bytes: &[u8]) -> Option<EncodingDetectionResult> {
         confidence: DetectionConfidence::Low,
     })
 }
+
+

@@ -170,3 +170,5 @@ pub fn detect_encoding_heuristic_with_confidence(
         confidence: DetectionConfidence::Unknown,
     })
 }
+
+
