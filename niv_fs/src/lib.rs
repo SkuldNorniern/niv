@@ -1,18 +1,25 @@
 //! # niv_fs - Filesystem utilities for niv editor
 //!
-//! Encoding detection utilities with no external dependencies.
+//! Comprehensive file operations with encoding detection, atomic writes, and external change detection.
 //!
 //! Modules:
 //! - `bom` for BOM detection (UTF-8/16/32)
 //! - `encoding` for heuristic detection (UTF-8, UTF-16, Latin-1/9, Windows-1252)
+//! - `file` for file loading/saving operations
 
 mod bom;
 mod encoding;
+mod file;
 
 pub use bom::{BomDetectionResult, detect_bom};
 pub use encoding::{
     DetectionConfidence, DetectionConfig, Encoding, EncodingDetectionResult,
     detect_encoding_heuristic, detect_encoding_heuristic_with_confidence,
+};
+pub use file::{
+    FileLoadResult, FileLoadConfig, load_file, load_file_with_config,
+    FileSaveResult, FileSaveConfig, save_file, save_file_with_config,
+    SaveContext, FileIdentity, FileIdentityConfig,
 };
 
 use std::fmt;
