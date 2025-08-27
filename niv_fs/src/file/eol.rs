@@ -1,6 +1,7 @@
 //! End-of-line detection and normalization utilities.
 
 use std::borrow::Cow;
+use std::fmt;
 
 /// Represents the detected end-of-line type in a file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,6 +14,17 @@ pub enum EolType {
     Cr,
     /// Mixed end-of-lines detected
     Mixed,
+}
+
+impl fmt::Display for EolType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EolType::Lf => write!(f, "LF (\\n)"),
+            EolType::Crlf => write!(f, "CRLF (\\r\\n)"),
+            EolType::Cr => write!(f, "CR (\\r)"),
+            EolType::Mixed => write!(f, "Mixed"),
+        }
+    }
 }
 
 /// Detect the predominant end-of-line type in the given bytes.
