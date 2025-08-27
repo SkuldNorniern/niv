@@ -6,17 +6,13 @@
 //! - `bom` for BOM detection (UTF-8/16/32)
 //! - `encoding` for heuristic detection (UTF-8, UTF-16, Latin-1/9, Windows-1252)
 
-mod encoding;
 mod bom;
+mod encoding;
 
-pub use bom::{detect_bom, BomDetectionResult};
+pub use bom::{BomDetectionResult, detect_bom};
 pub use encoding::{
-    detect_encoding_heuristic,
-    detect_encoding_heuristic_with_confidence,
-    DetectionConfig,
-    DetectionConfidence,
-    Encoding,
-    EncodingDetectionResult,
+    DetectionConfidence, DetectionConfig, Encoding, EncodingDetectionResult,
+    detect_encoding_heuristic, detect_encoding_heuristic_with_confidence,
 };
 
 use std::fmt;
@@ -53,7 +49,9 @@ impl std::error::Error for EncodingError {
 }
 
 impl From<io::Error> for EncodingError {
-    fn from(err: io::Error) -> Self { EncodingError::Io(err) }
+    fn from(err: io::Error) -> Self {
+        EncodingError::Io(err)
+    }
 }
 
 /// Result type for encoding detection operations
@@ -131,5 +129,3 @@ pub fn detect_encoding_from_file_with_confidence<P: AsRef<std::path::Path>>(
 
     detect_encoding_with_confidence(content, Some(cfg))
 }
-
-
