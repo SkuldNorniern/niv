@@ -1,18 +1,20 @@
 //! # niv_fs - Filesystem utilities for niv editor
 //!
 //! Comprehensive file operations with encoding detection, atomic writes, external change detection,
-//! and crash recovery through swap files.
+//! crash recovery through swap files, and file system watching.
 //!
 //! Modules:
 //! - `bom` for BOM detection (UTF-8/16/32)
 //! - `encoding` for heuristic detection (UTF-8, UTF-16, Latin-1/9, Windows-1252)
 //! - `file` for file loading/saving operations
 //! - `swap` for crash recovery and periodic saves
+//! - `watcher` for external file change detection and conflict resolution
 
 mod bom;
 mod encoding;
 mod file;
 mod swap;
+mod watcher;
 
 pub use bom::{BomDetectionResult, detect_bom};
 pub use encoding::{
@@ -29,6 +31,11 @@ pub use swap::{
     SwapManager, SwapConfig, SwapFile, SwapStatus, DraftManager,
     SwapError, DraftError, SwapResult, DraftResult,
     CursorPosition, ViewportState,
+};
+pub use watcher::{
+    FileWatcher, WatcherConfig, WatchEvent, FileChange, ChangeType,
+    MergeConflict, ConflictResolution, WatcherError, WatcherResult,
+    FileState, FileSnapshot,
 };
 
 use std::fmt;
