@@ -53,6 +53,12 @@ pub struct RBTree {
     nodes: Vec<Node>,
 }
 
+impl Default for RBTree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RBTree {
     pub fn new() -> Self {
         Self {

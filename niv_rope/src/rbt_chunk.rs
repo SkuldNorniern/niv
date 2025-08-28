@@ -36,7 +36,7 @@ struct Leaf {
     buf: [u8; LEAF_MAX_SIZE],
     gap_lo: u16,
     gap_hi: u16,
-    
+
     nl_idx: Vec<u16>,
 }
 impl Leaf {
@@ -64,21 +64,19 @@ impl Leaf {
             self.buf.copy_within(off..gl, gh - n);
             self.gap_lo = off as u16;
             self.gap_hi = (gh - n) as u16;
-
         } else if off > gl {
             // Move RIGHT bytes [gh .. gh + n) to the LEFT edge of the gap: [gl .. gl + n)
             let n = off - gl;
             self.buf.copy_within(gh..gh + n, gl);
             self.gap_lo = off as u16;
             self.gap_hi = (gh + n) as u16;
-
         } else {
             // already at off
         }
 
         // (Optional debug) poison-fill the gap so you catch accidental reads:
         #[cfg(debug_assertions)]
-        for i in self.gap_lo as usize .. self.gap_hi as usize {
+        for i in self.gap_lo as usize..self.gap_hi as usize {
             self.buf[i] = 0xDD;
         }
         #[cfg(debug_assertions)]
@@ -92,7 +90,7 @@ impl Leaf {
 
     #[inline]
     fn byte_len(&self) -> usize {
-        self.gap_lo as usize + (LEAF_MAX_SIZE - self.gap_hi as usize) 
+        self.gap_lo as usize + (LEAF_MAX_SIZE - self.gap_hi as usize)
     }
 
     #[inline]
@@ -102,7 +100,9 @@ impl Leaf {
     }
 
     fn insert_newline_indices(&mut self, at: usize, data: &[u8]) {
-        if data.is_empty() { return; }
+        if data.is_empty() {
+            return;
+        }
         let mut new_positions: Vec<u16> = Vec::new();
         for (i, b) in data.iter().enumerate() {
             if *b == b'\n' {
@@ -112,7 +112,9 @@ impl Leaf {
                 }
             }
         }
-        if new_positions.is_empty() { return; }
+        if new_positions.is_empty() {
+            return;
+        }
         let insert_at = self.partition_point_nl(at);
         // shift existing >= at by added count
         let added = data.len();
@@ -120,11 +122,14 @@ impl Leaf {
             *p = (*p as usize + added) as u16;
         }
         // splice in sorted
-        self.nl_idx.splice(insert_at..insert_at, new_positions.into_iter());
+        self.nl_idx
+            .splice(insert_at..insert_at, new_positions.into_iter());
     }
 
     fn remove_newline_indices_in_range(&mut self, start: usize, end: usize) {
-        if start >= end { return; }
+        if start >= end {
+            return;
+        }
         let start_i = self.partition_point_nl(start);
         let end_i = self.partition_point_nl(end);
         self.nl_idx.drain(start_i..end_i);
@@ -139,14 +144,20 @@ impl Leaf {
         println!("insert: off={}, len={}", off, data.len());
         #[cfg(debug_assertions)]
         self.dbg_state("before insert");
-        if off > self.byte_len() { return Err(RBError::InvalidOffset); }
-        if data.is_empty() { return Ok(0); }
+        if off > self.byte_len() {
+            return Err(RBError::InvalidOffset);
+        }
+        if data.is_empty() {
+            return Ok(0);
+        }
         let avail = self.gap_size();
-        if avail == 0 { return Err(RBError::InsufficientSpace); }
+        if avail == 0 {
+            return Err(RBError::InsufficientSpace);
+        }
         let to_copy = core::cmp::min(avail, data.len());
         self.move_gap_to(off);
         let gl = self.gap_lo as usize;
-        self.buf[gl .. gl + to_copy].copy_from_slice(&data[..to_copy]);
+        self.buf[gl..gl + to_copy].copy_from_slice(&data[..to_copy]);
         self.gap_lo = (gl + to_copy) as u16;
 
         self.insert_newline_indices(off, &data[..to_copy]);
@@ -161,11 +172,17 @@ impl Leaf {
         #[cfg(debug_assertions)]
         self.dbg_state("before delete");
         let cur_len = self.byte_len();
-        if off > cur_len { return Err(RBError::InvalidOffset); }
-        if len == 0 { return Ok(0); }
+        if off > cur_len {
+            return Err(RBError::InvalidOffset);
+        }
+        if len == 0 {
+            return Ok(0);
+        }
         let end = core::cmp::min(cur_len, off + len);
         let actual = end - off;
-        if actual == 0 { return Ok(0); }
+        if actual == 0 {
+            return Ok(0);
+        }
         self.move_gap_to(off);
         // Expand gap to cover [off, off+actual)
         self.gap_hi = (self.gap_hi as usize + actual) as u16;
@@ -181,9 +198,13 @@ impl Leaf {
         #[cfg(debug_assertions)]
         self.dbg_state("before read_into");
         let cur_len = self.byte_len();
-        if off > cur_len { return Err(RBError::InvalidOffset); }
+        if off > cur_len {
+            return Err(RBError::InvalidOffset);
+        }
         let want = core::cmp::min(out.len(), cur_len - off);
-        if want == 0 { return Ok(0); }
+        if want == 0 {
+            return Ok(0);
+        }
         let gl = self.gap_lo as usize;
         let gh = self.gap_hi as usize;
         if off < gl {
@@ -212,7 +233,12 @@ impl Leaf {
         let gap = self.gap_size();
         println!(
             "Leaf[{}]: used={}, gap_lo={}, gap_hi={}, gap={}, lines={}",
-            label, used, self.gap_lo, self.gap_hi, gap, self.nl_idx.len()
+            label,
+            used,
+            self.gap_lo,
+            self.gap_hi,
+            gap,
+            self.nl_idx.len()
         );
     }
 }
@@ -224,12 +250,11 @@ struct Node {
     right: NodeId,
     parent: NodeId,
     color: Color,
-    
+
     sub_bytes: u64,
     sub_lines: u64,
 
     payload: Payload,
-    
 }
 
 impl Node {
@@ -437,7 +462,9 @@ impl RBRope {
     fn ensure_root_leaf(&mut self) -> Result<NodeId, RBError> {
         if self.root == NIL {
             let new_id = self.nodes.len() as NodeId;
-            if new_id == NIL { return Err(RBError::TreeFull); }
+            if new_id == NIL {
+                return Err(RBError::TreeFull);
+            }
             self.nodes.push(Node::new(0));
             self.root = new_id;
             self.nodes[new_id as usize].color = Color::Black;
@@ -465,7 +492,9 @@ impl RBRope {
     }
 
     pub fn read_bytes(&self, off: usize, out: &mut [u8]) -> Result<usize, RBError> {
-        if self.root == NIL { return Ok(0); }
+        if self.root == NIL {
+            return Ok(0);
+        }
         match &self.nodes[self.root as usize].payload {
             Payload::Leaf(l) => l.read_into(off, out),
             Payload::Branch => Ok(0),
@@ -491,21 +520,32 @@ impl RBRope {
     }
 
     fn min_node(&self, mut n: NodeId) -> NodeId {
-        if n == NIL { return NIL; }
-        while self.nodes[n as usize].left != NIL { n = self.nodes[n as usize].left; }
+        if n == NIL {
+            return NIL;
+        }
+        while self.nodes[n as usize].left != NIL {
+            n = self.nodes[n as usize].left;
+        }
         n
     }
 
     fn successor(&self, mut n: NodeId) -> NodeId {
-        if n == NIL { return NIL; }
+        if n == NIL {
+            return NIL;
+        }
         let right = self.nodes[n as usize].right;
-        if right != NIL { return self.min_node(right); }
+        if right != NIL {
+            return self.min_node(right);
+        }
         let mut p = self.nodes[n as usize].parent;
-        while p != NIL && n == self.nodes[p as usize].right { n = p; p = self.nodes[p as usize].parent; }
+        while p != NIL && n == self.nodes[p as usize].right {
+            n = p;
+            p = self.nodes[p as usize].parent;
+        }
         p
     }
 
-    pub fn read_bytes_global(&self, mut off: usize, out: &mut [u8]) -> Result<usize, RBError> {
+    pub fn read_bytes_global(&self, off: usize, out: &mut [u8]) -> Result<usize, RBError> {
         let mut written = 0usize;
         let mut cur = self.min_node(self.root);
         let mut skip = off;
@@ -513,8 +553,9 @@ impl RBRope {
             match &self.nodes[cur as usize].payload {
                 Payload::Leaf(l) => {
                     let ll = l.byte_len();
-                    if skip >= ll { skip -= ll; }
-                    else {
+                    if skip >= ll {
+                        skip -= ll;
+                    } else {
                         let want = core::cmp::min(out.len() - written, ll - skip);
                         let w = l.read_into(skip, &mut out[written..written + want])?;
                         written += w;
@@ -529,7 +570,9 @@ impl RBRope {
     }
 
     pub fn find_first(&self, needle: &[u8]) -> Option<usize> {
-        if needle.is_empty() { return Some(0); }
+        if needle.is_empty() {
+            return Some(0);
+        }
         // Build contiguous buffer (OK for demos/tests)
         let mut all: Vec<u8> = Vec::new();
         let mut cur = self.min_node(self.root);
@@ -541,20 +584,34 @@ impl RBRope {
             }
             cur = self.successor(cur);
         }
-        if all.len() < needle.len() { return None; }
+        if all.len() < needle.len() {
+            return None;
+        }
         let last = all.len() - needle.len();
         let mut i = 0usize;
         while i <= last {
-            if &all[i..i + needle.len()] == needle { return Some(i); }
+            if &all[i..i + needle.len()] == needle {
+                return Some(i);
+            }
             i += 1;
         }
         None
     }
 
-    pub fn replace_first_same_len(&mut self, needle: &[u8], replacement: &[u8]) -> Result<bool, RBError> {
-        if needle.is_empty() { return Ok(false); }
-        if needle.len() != replacement.len() { return Ok(false); }
-        let Some(mut global_off) = self.find_first(needle) else { return Ok(false); };
+    pub fn replace_first_same_len(
+        &mut self,
+        needle: &[u8],
+        replacement: &[u8],
+    ) -> Result<bool, RBError> {
+        if needle.is_empty() {
+            return Ok(false);
+        }
+        if needle.len() != replacement.len() {
+            return Ok(false);
+        }
+        let Some(mut global_off) = self.find_first(needle) else {
+            return Ok(false);
+        };
         // Walk leaves to locate the one containing the occurrence
         let mut cur = self.min_node(self.root);
         while cur != NIL {
@@ -562,29 +619,42 @@ impl RBRope {
             let is_replaced = match &mut self.nodes[node_idx].payload {
                 Payload::Leaf(l) => {
                     let ll = l.byte_len();
-                    if global_off >= ll { global_off -= ll; false }
-                    else {
+                    if global_off >= ll {
+                        global_off -= ll;
+                        false
+                    } else {
                         // Replace by delete+insert to honor gap buffer
                         let del = l.delete(global_off, needle.len())?;
-                        if del != needle.len() { return Ok(false); }
+                        if del != needle.len() {
+                            return Ok(false);
+                        }
                         let ins = l.insert(global_off, replacement)?;
-                        if ins != replacement.len() { return Ok(false); }
+                        if ins != replacement.len() {
+                            return Ok(false);
+                        }
                         true
                     }
                 }
                 Payload::Branch => false,
             };
-            if is_replaced { return Ok(true); }
+            if is_replaced {
+                return Ok(true);
+            }
             cur = self.successor(cur);
         }
         Ok(false)
     }
 
     fn visualize_node(&self, node_id: NodeId, depth: usize) {
-        if node_id == NIL { return; }
+        if node_id == NIL {
+            return;
+        }
         let node = &self.nodes[node_id as usize];
         let indent = "  ".repeat(depth);
-        let color = match node.color { Color::Red => 'R', Color::Black => 'B' };
+        let color = match node.color {
+            Color::Red => 'R',
+            Color::Black => 'B',
+        };
         match &node.payload {
             Payload::Leaf(l) => {
                 println!(
@@ -601,24 +671,31 @@ impl RBRope {
             Payload::Branch => {
                 println!(
                     "{}[{}] key={} Branch (left={}, right={})",
-                    indent,
-                    color,
-                    node.key,
-                    node.left,
-                    node.right
+                    indent, color, node.key, node.left, node.right
                 );
             }
         }
-        if node.left != NIL { self.visualize_node(node.left, depth + 1); }
-        if node.right != NIL { self.visualize_node(node.right, depth + 1); }
+        if node.left != NIL {
+            self.visualize_node(node.left, depth + 1);
+        }
+        if node.right != NIL {
+            self.visualize_node(node.right, depth + 1);
+        }
     }
 
     fn visualize_node_limited(&self, node_id: NodeId, depth: usize, max_depth: usize) {
-        if node_id == NIL { return; }
-        if depth > max_depth { return; }
+        if node_id == NIL {
+            return;
+        }
+        if depth > max_depth {
+            return;
+        }
         let node = &self.nodes[node_id as usize];
         let indent = "  ".repeat(depth);
-        let color = match node.color { Color::Red => 'R', Color::Black => 'B' };
+        let color = match node.color {
+            Color::Red => 'R',
+            Color::Black => 'B',
+        };
         match &node.payload {
             Payload::Leaf(l) => {
                 println!(
@@ -635,17 +712,19 @@ impl RBRope {
             Payload::Branch => {
                 println!(
                     "{}[{}] key={} Branch (left={}, right={})",
-                    indent,
-                    color,
-                    node.key,
-                    node.left,
-                    node.right
+                    indent, color, node.key, node.left, node.right
                 );
             }
         }
-        if depth == max_depth { return; }
-        if node.left != NIL { self.visualize_node_limited(node.left, depth + 1, max_depth); }
-        if node.right != NIL { self.visualize_node_limited(node.right, depth + 1, max_depth); }
+        if depth == max_depth {
+            return;
+        }
+        if node.left != NIL {
+            self.visualize_node_limited(node.left, depth + 1, max_depth);
+        }
+        if node.right != NIL {
+            self.visualize_node_limited(node.right, depth + 1, max_depth);
+        }
     }
 
     pub fn build_from_bytes(&mut self, data: &[u8]) -> Result<usize, RBError> {
@@ -657,7 +736,11 @@ impl RBRope {
         let mut key: u64 = 0;
         while inserted_total < data.len() {
             let remaining = data.len() - inserted_total;
-            let take = if remaining > LEAF_MAX_SIZE { LEAF_MAX_SIZE } else { remaining };
+            let take = if remaining > LEAF_MAX_SIZE {
+                LEAF_MAX_SIZE
+            } else {
+                remaining
+            };
             let new_id = self.insert_with_id(key)?;
             key = key.saturating_add(1);
             if let Payload::Leaf(ref mut leaf) = self.nodes[new_id as usize].payload {
@@ -884,9 +967,13 @@ mod tests {
             let wrote = tree
                 .insert_bytes(off, &long_data[inserted_total..])
                 .expect("insert into root failed");
-            if wrote == 0 { break; }
+            if wrote == 0 {
+                break;
+            }
             inserted_total += wrote;
-            if tree.len() >= LEAF_MAX_SIZE { break; }
+            if tree.len() >= LEAF_MAX_SIZE {
+                break;
+            }
         }
 
         // We only have one leaf; verify we filled up to capacity
@@ -908,7 +995,9 @@ mod tests {
             data.extend_from_slice(b"abcdefghi\n");
         }
         let expected_len = data.len();
-        let wrote = tree.build_from_bytes(&data).expect("build_from_bytes failed");
+        let wrote = tree
+            .build_from_bytes(&data)
+            .expect("build_from_bytes failed");
         assert_eq!(wrote, expected_len);
         assert!(tree.count_leaves() >= 10);
         assert_eq!(tree.len(), expected_len);
