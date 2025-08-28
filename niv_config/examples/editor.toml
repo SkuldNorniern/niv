@@ -1,0 +1,147 @@
+# Example niv editor configuration
+# This demonstrates the comprehensive configuration options available
+
+[editor]
+# Editor behavior settings (vim-like)
+line_numbers = true
+relative_numbers = false
+tab_width = 4
+expand_tab = true
+auto_indent = true
+smart_indent = true
+cursor_line = false
+show_match = true
+syntax = true
+incsearch = true
+hlsearch = true
+ignorecase = false
+smartcase = true
+wrap = true
+line_break = false
+scrolloff = 5
+sidescrolloff = 10
+mouse = false
+backup = false
+writebackup = true
+swapfile = true
+undolevels = 1000
+undofile = true
+autoread = true
+autowrite = false
+confirm = true
+
+[ui]
+# User interface settings
+color_scheme = "default"
+font_family = "monospace"
+font_size = 12
+terminal_theme = "dark"
+status_line = true
+command_line = true
+tab_bar = true
+transparency = 100
+minimap = false
+file_tree = false
+
+# Custom color scheme
+[ui.colors]
+background = "#1E1E1E"
+foreground = "#D4D4D4"
+cursor = "#FFFFFF"
+selection_bg = "#264F78"
+selection_fg = "#FFFFFF"
+
+# Syntax highlighting colors
+[ui.colors.syntax]
+keyword = "#569CD6"
+string = "#CE9178"
+comment = "#6A9955"
+function = "#DCDCAA"
+variable = "#9CDCFE"
+type_name = "#4EC9B0"
+number = "#B5CEA8"
+operator = "#D4D4D4"
+
+[keybindings]
+# Vim-like keybindings (default)
+# Movement
+normal.h = "move_left"
+normal.j = "move_down"
+normal.k = "move_up"
+normal.l = "move_right"
+normal.0 = "move_line_start"
+normal.$ = "move_line_end"
+
+# Editing
+normal.i = "insert"
+normal.O = "insert_line_above"
+normal.o = "insert_line_below"
+normal.x = "delete"
+normal.u = "undo"
+
+# Search
+normal./ = "search"
+normal.n = "search_next"
+
+# Files
+normal.: = "command_mode"
+global.Ctrl+s = "save"
+global.Ctrl+q = "force_quit"
+
+# Custom keybindings
+normal.Ctrl+p = "custom:fuzzy_file_open"
+normal.Ctrl+t = "custom:file_tree_toggle"
+
+[extensions]
+# Extension/plugin settings
+auto_load = true
+allow_network = true
+update_policy = "stable"
+
+# Extension directories
+directories = [
+    "~/.niv/extensions",
+    "~/.local/share/niv/extensions",
+    "/usr/local/share/niv/extensions"
+]
+
+# Trusted extension sources
+trusted_sources = [
+    "https://github.com/niv-editor/extensions"
+]
+
+# Example extensions
+[extensions.rust_analyzer]
+enabled = true
+version = "latest"
+settings.lsp_enabled = true
+settings.formatting_enabled = true
+
+[extensions.theme_dark]
+enabled = true
+settings.variant = "dark_plus"
+
+[extensions.git_integration]
+enabled = false
+settings.show_blame = true
+settings.auto_commit = false
+
+# Custom settings for your specific workflow
+[custom]
+# Project-specific settings
+project_name = "niv_editor"
+project_version = "0.1.0"
+author = "niv team"
+
+# Development settings
+debug_mode = true
+log_level = "info"
+performance_monitoring = false
+
+# Workspace settings
+max_open_files = 50
+recent_files_count = 20
+
+# Feature flags
+experimental_features = ["lsp", "tree_sitter"]
+disabled_features = ["minimap"]

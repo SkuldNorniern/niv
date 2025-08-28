@@ -1,0 +1,13 @@
+[package]
+name = "niv_config"
+version = "0.1.0"
+edition = "2024"
+description = "Configuration system for niv editor with TOML support"
+license = "MIT OR Apache-2.0"
+authors = ["niv editor team"]
+
+[lints.clippy]
+unwrap_used = "deny"
+cognitive_complexity = "deny"
+
+[dependencies]
