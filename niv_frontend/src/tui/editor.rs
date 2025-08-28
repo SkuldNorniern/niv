@@ -16,8 +16,12 @@ pub struct RenderState {
     pub full_redraw: bool,
     /// Whether the text area needs redrawing
     pub text_area_dirty: bool,
+    /// Specific lines that need redrawing in text area (None = all lines)
+    pub dirty_text_lines: Option<std::collections::HashSet<usize>>,
     /// Whether line numbers need redrawing
     pub line_numbers_dirty: bool,
+    /// Specific line numbers that need redrawing (None = all lines)
+    pub dirty_line_numbers: Option<std::collections::HashSet<usize>>,
     /// Whether the status line needs redrawing
     pub status_line_dirty: bool,
     /// Whether the command line needs redrawing
@@ -32,6 +36,9 @@ pub struct RenderState {
     pub last_scroll_col: usize,
     /// Last known buffer content hash for change detection
     pub last_content_hash: u64,
+    /// Last known cursor line and column for change detection
+    pub last_cursor_line: usize,
+    pub last_cursor_col: usize,
 }
 
 impl Default for RenderState {
@@ -39,7 +46,9 @@ impl Default for RenderState {
         Self {
             full_redraw: true, // Start with full redraw
             text_area_dirty: true,
+            dirty_text_lines: None,
             line_numbers_dirty: true,
+            dirty_line_numbers: None,
             status_line_dirty: true,
             command_line_dirty: true,
             cursor_dirty: true,
@@ -48,6 +57,8 @@ impl Default for RenderState {
             last_scroll_line: 0,
             last_scroll_col: 0,
             last_content_hash: 0,
+            last_cursor_line: 0,
+            last_cursor_col: 0,
         }
     }
 }
@@ -57,7 +68,9 @@ impl RenderState {
     pub fn mark_all_dirty(&mut self) {
         self.full_redraw = true;
         self.text_area_dirty = true;
+        self.dirty_text_lines = None;
         self.line_numbers_dirty = true;
+        self.dirty_line_numbers = None;
         self.status_line_dirty = true;
         self.command_line_dirty = true;
         self.cursor_dirty = true;
@@ -66,15 +79,47 @@ impl RenderState {
     /// Mark only text area for redrawing
     pub fn mark_text_dirty(&mut self) {
         self.text_area_dirty = true;
+        self.dirty_text_lines = None;
         self.line_numbers_dirty = true;
+        self.dirty_line_numbers = None;
         self.cursor_dirty = true;
+    }
+
+    /// Mark specific text lines for redrawing
+    pub fn mark_text_lines_dirty(&mut self, lines: std::collections::HashSet<usize>) {
+        self.text_area_dirty = true;
+        if let Some(ref mut dirty_lines) = self.dirty_text_lines {
+            dirty_lines.extend(lines);
+        } else {
+            self.dirty_text_lines = Some(lines);
+        }
+
+        // Also mark corresponding line numbers as dirty
+        if let Some(ref dirty_lines) = self.dirty_text_lines.clone() {
+            self.line_numbers_dirty = true;
+            if let Some(ref mut dirty_nums) = self.dirty_line_numbers {
+                dirty_nums.extend(dirty_lines.iter().cloned());
+            } else {
+                self.dirty_line_numbers = Some(dirty_lines.clone());
+            }
+        }
+        self.cursor_dirty = true;
+    }
+
+    /// Mark single line for redrawing
+    pub fn mark_line_dirty(&mut self, line_idx: usize) {
+        let mut lines = std::collections::HashSet::new();
+        lines.insert(line_idx);
+        self.mark_text_lines_dirty(lines);
     }
 
     /// Clear all dirty flags after successful draw
     pub fn clear_dirty(&mut self) {
         self.full_redraw = false;
         self.text_area_dirty = false;
+        self.dirty_text_lines = None;
         self.line_numbers_dirty = false;
+        self.dirty_line_numbers = None;
         self.status_line_dirty = false;
         self.command_line_dirty = false;
         self.cursor_dirty = false;
@@ -148,10 +193,23 @@ impl Editor {
             let layout = self.layout_manager.get_layout();
             let (cursor_x, cursor_y) = layout.buffer_to_screen(buffer.cursor_col as u16, buffer.cursor_line as u16);
 
+            // Check if cursor moved to different screen position
             if cursor_x != self.render_state.last_cursor_x || cursor_y != self.render_state.last_cursor_y {
                 self.render_state.cursor_dirty = true;
                 self.render_state.last_cursor_x = cursor_x;
                 self.render_state.last_cursor_y = cursor_y;
+            }
+
+            // Check if cursor moved to different line (for partial rendering)
+            if buffer.cursor_line != self.render_state.last_cursor_line {
+                self.render_state.cursor_dirty = true;
+                self.render_state.last_cursor_line = buffer.cursor_line;
+            }
+
+            // Check if cursor moved within same line (only cursor needs updating)
+            if buffer.cursor_col != self.render_state.last_cursor_col && buffer.cursor_line == self.render_state.last_cursor_line {
+                self.render_state.cursor_dirty = true;
+                self.render_state.last_cursor_col = buffer.cursor_col;
             }
         }
 
@@ -159,10 +217,8 @@ impl Editor {
         if let Some(buffer) = self.buffer_manager.current() {
             if buffer.scroll_line != self.render_state.last_scroll_line ||
                buffer.scroll_col != self.render_state.last_scroll_col {
-                // When scroll changes, we need to redraw text area and line numbers
-                self.render_state.text_area_dirty = true;
-                self.render_state.line_numbers_dirty = true;
-                self.render_state.cursor_dirty = true;
+                // When scroll changes, we need to redraw everything visible
+                self.render_state.mark_all_dirty();
                 self.render_state.last_scroll_line = buffer.scroll_line;
                 self.render_state.last_scroll_col = buffer.scroll_col;
             }
@@ -214,6 +270,8 @@ impl Editor {
             self.render_state.last_content_hash = Self::simple_hash(&buffer.content);
             self.render_state.last_scroll_line = buffer.scroll_line;
             self.render_state.last_scroll_col = buffer.scroll_col;
+            self.render_state.last_cursor_line = buffer.cursor_line;
+            self.render_state.last_cursor_col = buffer.cursor_col;
         }
 
         // Main event loop with optimized rendering
@@ -360,14 +418,31 @@ impl Editor {
         let layout = self.layout_manager.get_layout();
         let line_numbers = buffer.line_numbers();
 
-        for (i, line_num) in line_numbers.iter().enumerate() {
-            execute!(
-                io::stdout(),
-                crossterm::cursor::MoveTo(0, i as u16),
-                crossterm::style::Print(
-                    line_num.clone().with(self.theme.line_number())
-                )
-            )?;
+        // If we have specific dirty line numbers, only redraw those
+        if let Some(ref dirty_nums) = self.render_state.dirty_line_numbers {
+            for &line_idx in dirty_nums {
+                if line_idx < line_numbers.len() {
+                    let line_num = &line_numbers[line_idx];
+                    execute!(
+                        io::stdout(),
+                        crossterm::cursor::MoveTo(0, line_idx as u16),
+                        crossterm::style::Print(
+                            line_num.clone().with(self.theme.line_number())
+                        )
+                    )?;
+                }
+            }
+        } else {
+            // Redraw all line numbers
+            for (i, line_num) in line_numbers.iter().enumerate() {
+                execute!(
+                    io::stdout(),
+                    crossterm::cursor::MoveTo(0, i as u16),
+                    crossterm::style::Print(
+                        line_num.clone().with(self.theme.line_number())
+                    )
+                )?;
+            }
         }
 
         Ok(())
@@ -377,18 +452,40 @@ impl Editor {
         let layout = self.layout_manager.get_layout();
         let lines = buffer.visible_lines();
 
-        for (i, line) in lines.iter().enumerate() {
-            let (screen_x, screen_y) = layout.buffer_to_screen(0, i as u16);
+        // If we have specific dirty lines, only redraw those
+        if let Some(ref dirty_lines) = self.render_state.dirty_text_lines {
+            for &line_idx in dirty_lines {
+                if line_idx < lines.len() {
+                    let line = &lines[line_idx];
+                    let (screen_x, screen_y) = layout.buffer_to_screen(0, line_idx as u16);
 
-            // Only draw if within bounds
-            if screen_y < layout.text_area_height {
-                execute!(
-                    io::stdout(),
-                    crossterm::cursor::MoveTo(screen_x, screen_y),
-                    crossterm::style::Print(
-                        line.clone().with(self.theme.fg())
-                    )
-                )?;
+                    // Only draw if within bounds
+                    if screen_y < layout.text_area_height {
+                        execute!(
+                            io::stdout(),
+                            crossterm::cursor::MoveTo(screen_x, screen_y),
+                            crossterm::style::Print(
+                                line.clone().with(self.theme.fg())
+                            )
+                        )?;
+                    }
+                }
+            }
+        } else {
+            // Redraw all visible lines
+            for (i, line) in lines.iter().enumerate() {
+                let (screen_x, screen_y) = layout.buffer_to_screen(0, i as u16);
+
+                // Only draw if within bounds
+                if screen_y < layout.text_area_height {
+                    execute!(
+                        io::stdout(),
+                        crossterm::cursor::MoveTo(screen_x, screen_y),
+                        crossterm::style::Print(
+                            line.clone().with(self.theme.fg())
+                        )
+                    )?;
+                }
             }
         }
 
@@ -508,31 +605,38 @@ impl Editor {
             KeyCode::Char('h') | KeyCode::Left => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
                     buffer.move_cursor_left();
+                    // Only mark cursor as dirty since we're just moving within the same view
+                    self.render_state.cursor_dirty = true;
                 }
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
                     buffer.move_cursor_down();
+                    self.render_state.cursor_dirty = true;
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
                     buffer.move_cursor_up();
+                    self.render_state.cursor_dirty = true;
                 }
             }
             KeyCode::Char('l') | KeyCode::Right => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
                     buffer.move_cursor_right();
+                    self.render_state.cursor_dirty = true;
                 }
             }
             KeyCode::Char('0') => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
                     buffer.move_cursor_line_start();
+                    self.render_state.cursor_dirty = true;
                 }
             }
             KeyCode::Char('$') => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
                     buffer.move_cursor_line_end();
+                    self.render_state.cursor_dirty = true;
                 }
             }
             KeyCode::Char('x') => {
