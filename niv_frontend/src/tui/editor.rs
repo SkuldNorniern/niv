@@ -9,6 +9,78 @@ use crate::tui::{buffer::*, layout::*, theme::*};
 use std::io::{self, Write};
 use std::path::PathBuf;
 
+/// Rendering state to track what needs to be redrawn
+#[derive(Debug, Clone)]
+pub struct RenderState {
+    /// Whether the entire screen needs redrawing
+    pub full_redraw: bool,
+    /// Whether the text area needs redrawing
+    pub text_area_dirty: bool,
+    /// Whether line numbers need redrawing
+    pub line_numbers_dirty: bool,
+    /// Whether the status line needs redrawing
+    pub status_line_dirty: bool,
+    /// Whether the command line needs redrawing
+    pub command_line_dirty: bool,
+    /// Whether the cursor position needs updating
+    pub cursor_dirty: bool,
+    /// Last known cursor position
+    pub last_cursor_x: u16,
+    pub last_cursor_y: u16,
+    /// Last known scroll position
+    pub last_scroll_line: usize,
+    pub last_scroll_col: usize,
+    /// Last known buffer content hash for change detection
+    pub last_content_hash: u64,
+}
+
+impl Default for RenderState {
+    fn default() -> Self {
+        Self {
+            full_redraw: true, // Start with full redraw
+            text_area_dirty: true,
+            line_numbers_dirty: true,
+            status_line_dirty: true,
+            command_line_dirty: true,
+            cursor_dirty: true,
+            last_cursor_x: 0,
+            last_cursor_y: 0,
+            last_scroll_line: 0,
+            last_scroll_col: 0,
+            last_content_hash: 0,
+        }
+    }
+}
+
+impl RenderState {
+    /// Mark everything for redrawing
+    pub fn mark_all_dirty(&mut self) {
+        self.full_redraw = true;
+        self.text_area_dirty = true;
+        self.line_numbers_dirty = true;
+        self.status_line_dirty = true;
+        self.command_line_dirty = true;
+        self.cursor_dirty = true;
+    }
+
+    /// Mark only text area for redrawing
+    pub fn mark_text_dirty(&mut self) {
+        self.text_area_dirty = true;
+        self.line_numbers_dirty = true;
+        self.cursor_dirty = true;
+    }
+
+    /// Clear all dirty flags after successful draw
+    pub fn clear_dirty(&mut self) {
+        self.full_redraw = false;
+        self.text_area_dirty = false;
+        self.line_numbers_dirty = false;
+        self.status_line_dirty = false;
+        self.command_line_dirty = false;
+        self.cursor_dirty = false;
+    }
+}
+
 /// Main TUI editor
 pub struct Editor {
     config_loader: ConfigLoader,
@@ -18,6 +90,8 @@ pub struct Editor {
     command_line: String,
     mode: EditorMode,
     running: bool,
+    /// Rendering state for selective updates
+    render_state: RenderState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,7 +118,65 @@ impl Editor {
             command_line: String::new(),
             mode: EditorMode::Normal,
             running: true,
+            render_state: RenderState::default(),
         }
+    }
+
+    /// Simple hash function for content change detection
+    fn simple_hash(content: &str) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        content.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// Update render state based on current editor state
+    fn update_render_state(&mut self) {
+        // Check if buffer content has changed
+        if let Some(buffer) = self.buffer_manager.current() {
+            let current_hash = Self::simple_hash(&buffer.content);
+            if current_hash != self.render_state.last_content_hash {
+                self.render_state.mark_text_dirty();
+                self.render_state.last_content_hash = current_hash;
+            }
+        }
+
+        // Check if cursor position has changed
+        if let Some(buffer) = self.buffer_manager.current() {
+            let layout = self.layout_manager.get_layout();
+            let (cursor_x, cursor_y) = layout.buffer_to_screen(buffer.cursor_col as u16, buffer.cursor_line as u16);
+
+            if cursor_x != self.render_state.last_cursor_x || cursor_y != self.render_state.last_cursor_y {
+                self.render_state.cursor_dirty = true;
+                self.render_state.last_cursor_x = cursor_x;
+                self.render_state.last_cursor_y = cursor_y;
+            }
+        }
+
+        // Check if scroll position has changed
+        if let Some(buffer) = self.buffer_manager.current() {
+            if buffer.scroll_line != self.render_state.last_scroll_line ||
+               buffer.scroll_col != self.render_state.last_scroll_col {
+                // When scroll changes, we need to redraw text area and line numbers
+                self.render_state.text_area_dirty = true;
+                self.render_state.line_numbers_dirty = true;
+                self.render_state.cursor_dirty = true;
+                self.render_state.last_scroll_line = buffer.scroll_line;
+                self.render_state.last_scroll_col = buffer.scroll_col;
+            }
+        }
+    }
+
+    /// Check if anything needs to be redrawn
+    fn needs_redraw(&self) -> bool {
+        self.render_state.full_redraw
+            || self.render_state.text_area_dirty
+            || self.render_state.line_numbers_dirty
+            || self.render_state.status_line_dirty
+            || self.render_state.command_line_dirty
+            || self.render_state.cursor_dirty
     }
 
     pub fn run(&mut self) -> std::io::Result<()> {
@@ -77,9 +209,25 @@ impl Editor {
             }
         }
 
-        // Main event loop
+        // Initialize content hash and scroll position for first buffer if it exists
+        if let Some(buffer) = self.buffer_manager.current() {
+            self.render_state.last_content_hash = Self::simple_hash(&buffer.content);
+            self.render_state.last_scroll_line = buffer.scroll_line;
+            self.render_state.last_scroll_col = buffer.scroll_col;
+        }
+
+        // Main event loop with optimized rendering
         while self.running {
-            self.draw()?;
+            // Update render state based on current editor state
+            self.update_render_state();
+
+            // Only draw if something has changed
+            if self.needs_redraw() {
+                self.draw()?;
+                self.render_state.clear_dirty();
+            }
+
+            // Handle events (this is blocking, so we always do it)
             self.handle_events()?;
         }
 
@@ -94,25 +242,117 @@ impl Editor {
         let layout = self.layout_manager.get_layout();
         let config = self.config_loader.get_copy();
 
-        // Clear screen
-        execute!(io::stdout(), crossterm::terminal::Clear(crossterm::terminal::ClearType::All))?;
+        // Full redraw: clear entire screen and redraw everything
+        if self.render_state.full_redraw {
+            execute!(io::stdout(), crossterm::terminal::Clear(crossterm::terminal::ClearType::All))?;
 
-        // Draw line numbers and text
-        if let Some(buffer) = self.buffer_manager.current() {
-            self.draw_line_numbers(buffer, &config.editor)?;
-            self.draw_text_area(buffer)?;
+            // Draw everything
+            if let Some(buffer) = self.buffer_manager.current() {
+                self.draw_line_numbers(buffer, &config.editor)?;
+                self.draw_text_area(buffer)?;
+            }
+            self.draw_status_line(&config.editor)?;
+            self.draw_command_line()?;
+            self.position_cursor()?;
+        } else {
+            // Selective redraw: only redraw changed components
+
+            // Clear and redraw text area if needed
+            if self.render_state.text_area_dirty {
+                self.clear_text_area()?;
+                if let Some(buffer) = self.buffer_manager.current() {
+                    self.draw_text_area(buffer)?;
+                }
+            }
+
+            // Clear and redraw line numbers if needed
+            if self.render_state.line_numbers_dirty {
+                self.clear_line_numbers()?;
+                if let Some(buffer) = self.buffer_manager.current() {
+                    self.draw_line_numbers(buffer, &config.editor)?;
+                }
+            }
+
+            // Clear and redraw status line if needed
+            if self.render_state.status_line_dirty {
+                self.clear_status_line()?;
+                self.draw_status_line(&config.editor)?;
+            }
+
+            // Clear and redraw command line if needed
+            if self.render_state.command_line_dirty {
+                self.clear_command_line()?;
+                self.draw_command_line()?;
+            }
+
+            // Update cursor position if needed
+            if self.render_state.cursor_dirty {
+                self.position_cursor()?;
+            }
         }
 
-        // Draw status line
-        self.draw_status_line(&config.editor)?;
-
-        // Draw command line
-        self.draw_command_line()?;
-
-        // Position cursor
-        self.position_cursor()?;
-
         io::stdout().flush()?;
+        Ok(())
+    }
+
+    /// Clear only the text area region
+    fn clear_text_area(&self) -> std::io::Result<()> {
+        let layout = self.layout_manager.get_layout();
+        let height = layout.text_area_height;
+
+        for y in 0..height {
+            let screen_x = layout.line_number_width;
+            let screen_y = y;
+            execute!(
+                io::stdout(),
+                crossterm::cursor::MoveTo(screen_x, screen_y),
+                crossterm::style::Print(" ".repeat(layout.text_area_width as usize))
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Clear only the line numbers region
+    fn clear_line_numbers(&self) -> std::io::Result<()> {
+        let layout = self.layout_manager.get_layout();
+        let height = layout.text_area_height;
+        let width = layout.line_number_width;
+
+        for y in 0..height {
+            execute!(
+                io::stdout(),
+                crossterm::cursor::MoveTo(0, y),
+                crossterm::style::Print(" ".repeat(width as usize))
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Clear only the status line region
+    fn clear_status_line(&self) -> std::io::Result<()> {
+        let layout = self.layout_manager.get_layout();
+        let width = layout.width;
+        let y = layout.status_line_row;
+
+        execute!(
+            io::stdout(),
+            crossterm::cursor::MoveTo(0, y),
+            crossterm::style::Print(" ".repeat(width as usize))
+        )?;
+        Ok(())
+    }
+
+    /// Clear only the command line region
+    fn clear_command_line(&self) -> std::io::Result<()> {
+        let layout = self.layout_manager.get_layout();
+        let width = layout.width;
+        let y = layout.height - 1;
+
+        execute!(
+            io::stdout(),
+            crossterm::cursor::MoveTo(0, y),
+            crossterm::style::Print(" ".repeat(width as usize))
+        )?;
         Ok(())
     }
 
@@ -231,6 +471,7 @@ impl Editor {
                             self.layout_manager.get_layout().text_area_height,
                         );
                     }
+                    self.render_state.mark_all_dirty(); // Full redraw needed on resize
                 }
                 Ok(_) => {} // Other events
                 Err(_) => {} // Event read error
@@ -252,13 +493,17 @@ impl Editor {
         match key_event.code {
             KeyCode::Char('i') => {
                 self.mode = EditorMode::Insert;
+                self.render_state.status_line_dirty = true;
             }
             KeyCode::Char('v') => {
                 self.mode = EditorMode::Visual;
+                self.render_state.status_line_dirty = true;
             }
             KeyCode::Char(':') => {
                 self.mode = EditorMode::Command;
                 self.command_line.clear();
+                self.render_state.command_line_dirty = true;
+                self.render_state.status_line_dirty = true;
             }
             KeyCode::Char('h') | KeyCode::Left => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
@@ -293,6 +538,7 @@ impl Editor {
             KeyCode::Char('x') => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
                     buffer.delete_char();
+                    self.render_state.mark_text_dirty();
                 }
             }
             KeyCode::Char('u') => {
@@ -317,30 +563,36 @@ impl Editor {
             KeyCode::Char(ch) => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
                     buffer.insert_char(ch);
+                    self.render_state.mark_text_dirty();
                 }
             }
             KeyCode::Enter => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
                     buffer.insert_newline();
+                    self.render_state.mark_text_dirty();
                 }
             }
             KeyCode::Backspace => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
                     buffer.backspace();
+                    self.render_state.mark_text_dirty();
                 }
             }
             KeyCode::Delete => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
                     buffer.delete_char();
+                    self.render_state.mark_text_dirty();
                 }
             }
             KeyCode::Tab => {
                 if let Some(buffer) = self.buffer_manager.current_mut() {
                     buffer.insert_char('\t');
+                    self.render_state.mark_text_dirty();
                 }
             }
             KeyCode::Esc => {
                 self.mode = EditorMode::Normal;
+                self.render_state.status_line_dirty = true; // Mode changed
             }
             _ => {}
         }
@@ -352,13 +604,16 @@ impl Editor {
             KeyCode::Char('y') => {
                 // TODO: Implement yank (copy)
                 self.mode = EditorMode::Normal;
+                self.render_state.status_line_dirty = true;
             }
             KeyCode::Char('d') => {
                 // TODO: Implement delete (cut)
                 self.mode = EditorMode::Normal;
+                self.render_state.status_line_dirty = true;
             }
             KeyCode::Esc => {
                 self.mode = EditorMode::Normal;
+                self.render_state.status_line_dirty = true;
             }
             _ => {}
         }
@@ -369,17 +624,23 @@ impl Editor {
         match key_event.code {
             KeyCode::Char(ch) => {
                 self.command_line.push(ch);
+                self.render_state.command_line_dirty = true;
             }
             KeyCode::Backspace => {
                 self.command_line.pop();
+                self.render_state.command_line_dirty = true;
             }
             KeyCode::Enter => {
                 self.execute_command()?;
                 self.mode = EditorMode::Normal;
+                self.render_state.command_line_dirty = true;
+                self.render_state.status_line_dirty = true;
             }
             KeyCode::Esc => {
                 self.mode = EditorMode::Normal;
                 self.command_line.clear();
+                self.render_state.command_line_dirty = true;
+                self.render_state.status_line_dirty = true;
             }
             _ => {}
         }
