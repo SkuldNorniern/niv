@@ -156,13 +156,26 @@ impl FileIdentity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
+    use std::env;
+
+    fn create_temp_file(content: &[u8]) -> std::path::PathBuf {
+        let temp_dir = env::temp_dir();
+        let file_name = format!("test_identity_{}.txt", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos());
+        let temp_path = temp_dir.join(file_name);
+        std::fs::write(&temp_path, content).unwrap();
+        temp_path
+    }
+
+    fn cleanup_temp_file(path: &std::path::Path) {
+        let _ = std::fs::remove_file(path);
+    }
 
     #[test]
     fn test_file_identity_creation() {
-        let temp_file = NamedTempFile::new().unwrap();
-        std::fs::write(&temp_file, b"Hello, world!").unwrap();
+        let temp_file = create_temp_file(b"Hello, world!");
 
         let config = FileIdentityConfig::default();
         let identity = FileIdentity::from_path(&temp_file, &config).unwrap();
@@ -170,12 +183,13 @@ mod tests {
         assert!(identity.size > 0);
         assert!(identity.device_id >= 0);
         assert!(identity.inode > 0);
+
+        cleanup_temp_file(&temp_file);
     }
 
     #[test]
     fn test_same_file_detection() {
-        let temp_file = NamedTempFile::new().unwrap();
-        std::fs::write(&temp_file, b"Hello, world!").unwrap();
+        let temp_file = create_temp_file(b"Hello, world!");
 
         let config = FileIdentityConfig::default();
         let identity1 = FileIdentity::from_path(&temp_file, &config).unwrap();
@@ -186,12 +200,13 @@ mod tests {
         let identity2 = FileIdentity::from_path(&temp_file, &config).unwrap();
 
         assert!(identity1.is_same_file(&identity2));
+
+        cleanup_temp_file(&temp_file);
     }
 
     #[test]
     fn test_content_hash() {
-        let temp_file = NamedTempFile::new().unwrap();
-        std::fs::write(&temp_file, b"Hello, world!").unwrap();
+        let temp_file = create_temp_file(b"Hello, world!");
 
         let config = FileIdentityConfig {
             use_fast_hash: true,
@@ -200,12 +215,13 @@ mod tests {
         let identity = FileIdentity::from_path(&temp_file, &config).unwrap();
 
         assert!(identity.content_hash.is_some());
+
+        cleanup_temp_file(&temp_file);
     }
 
     #[test]
     fn test_content_change_detection() {
-        let temp_file = NamedTempFile::new().unwrap();
-        std::fs::write(&temp_file, b"Hello, world!").unwrap();
+        let temp_file = create_temp_file(b"Hello, world!");
 
         let config = FileIdentityConfig {
             use_fast_hash: true,
@@ -225,5 +241,7 @@ mod tests {
         } else {
             panic!("Content hash should be available");
         }
+
+        cleanup_temp_file(&temp_file);
     }
 }

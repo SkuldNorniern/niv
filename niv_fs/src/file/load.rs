@@ -400,52 +400,70 @@ fn latin9_to_char(byte: u8) -> char {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
+    use std::env;
+
+    fn create_temp_file(content: &str) -> std::path::PathBuf {
+        let temp_dir = env::temp_dir();
+        let file_name = format!("test_file_{}.txt", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos());
+        let temp_path = temp_dir.join(file_name);
+        std::fs::write(&temp_path, content).unwrap();
+        temp_path
+    }
+
+    fn cleanup_temp_file(path: &std::path::Path) {
+        let _ = std::fs::remove_file(path);
+    }
 
     #[test]
     fn test_load_utf8_file() {
-        let temp_file = NamedTempFile::new().unwrap();
-        std::fs::write(&temp_file, "Hello, UTF-8!\nSecond line").unwrap();
+        let temp_file = create_temp_file("Hello, UTF-8!\nSecond line");
 
         let result = load_file(&temp_file).unwrap();
         assert_eq!(result.content, "Hello, UTF-8!\nSecond line");
         assert_eq!(result.original_encoding, Encoding::Utf8);
         assert_eq!(result.original_eol, EolType::Lf);
         assert!(!result.read_only);
+
+        cleanup_temp_file(&temp_file);
     }
 
     #[test]
     fn test_load_utf8_with_bom() {
-        let temp_file = NamedTempFile::new().unwrap();
         let mut content = vec![0xEF, 0xBB, 0xBF]; // UTF-8 BOM
         content.extend_from_slice(b"Hello with BOM!");
-        std::fs::write(&temp_file, content).unwrap();
+        let temp_file = create_temp_file(&String::from_utf8_lossy(&content));
 
         let result = load_file(&temp_file).unwrap();
         assert_eq!(result.content, "Hello with BOM!");
         assert_eq!(result.original_encoding, Encoding::Utf8);
+
+        cleanup_temp_file(&temp_file);
     }
 
     #[test]
     fn test_load_binary_file() {
-        let temp_file = NamedTempFile::new().unwrap();
         let binary_content = vec![0u8; 1024]; // Lots of null bytes
-        std::fs::write(&temp_file, binary_content).unwrap();
+        let temp_file = create_temp_file(&String::from_utf8_lossy(&binary_content));
 
         let result = load_file(&temp_file).unwrap();
         assert!(result.read_only);
         assert!(result.warnings.iter().any(|w| w.contains("Binary file")));
+
+        cleanup_temp_file(&temp_file);
     }
 
     #[test]
     fn test_load_crlf_file() {
-        let temp_file = NamedTempFile::new().unwrap();
-        std::fs::write(&temp_file, b"Line1\r\nLine2\r\nLine3").unwrap();
+        let temp_file = create_temp_file("Line1\r\nLine2\r\nLine3");
 
         let result = load_file(&temp_file).unwrap();
         assert_eq!(result.content, "Line1\nLine2\nLine3");
         assert_eq!(result.original_eol, EolType::Crlf);
+
+        cleanup_temp_file(&temp_file);
     }
 
     #[test]

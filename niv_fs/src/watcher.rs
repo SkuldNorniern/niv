@@ -503,7 +503,6 @@ impl FileWatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
 
     fn test_config() -> WatcherConfig {
         WatcherConfig {

@@ -738,7 +738,7 @@ mod tests {
     #[test]
     fn test_draft_manager_creation() {
         let config = test_config();
-        let manager = DraftManager::new(config);
+        let _manager = DraftManager::new(config);
         // DraftManager has no fallible operations in constructor
     }
 }

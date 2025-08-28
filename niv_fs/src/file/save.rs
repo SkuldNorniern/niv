@@ -418,12 +418,26 @@ fn char_to_latin9(ch: char) -> Result<u8, crate::EncodingError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
+    use std::env;
+
+    fn create_temp_file(content: &str) -> std::path::PathBuf {
+        let temp_dir = env::temp_dir();
+        let file_name = format!("test_save_{}.txt", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos());
+        let temp_path = temp_dir.join(file_name);
+        std::fs::write(&temp_path, content).unwrap();
+        temp_path
+    }
+
+    fn cleanup_temp_file(path: &std::path::Path) {
+        let _ = std::fs::remove_file(path);
+    }
 
     #[test]
     fn test_save_utf8_file() {
-        let temp_file = NamedTempFile::new().unwrap();
+        let temp_file = create_temp_file("");
         let content = "Hello, UTF-8!\nSecond line";
         let context = SaveContext::new();
 
@@ -433,11 +447,13 @@ mod tests {
 
         let saved_content = std::fs::read_to_string(&temp_file).unwrap();
         assert_eq!(saved_content, content);
+
+        cleanup_temp_file(&temp_file);
     }
 
     #[test]
     fn test_save_with_bom() {
-        let temp_file = NamedTempFile::new().unwrap();
+        let temp_file = create_temp_file("");
         let content = "Hello with BOM!";
         let context = SaveContext {
             original_encoding: Encoding::Utf8,
@@ -460,11 +476,13 @@ mod tests {
         let saved_bytes = std::fs::read(&temp_file).unwrap();
         assert_eq!(&saved_bytes[0..3], &[0xEF, 0xBB, 0xBF]); // BOM
         assert_eq!(&saved_bytes[3..], content.as_bytes());
+
+        cleanup_temp_file(&temp_file);
     }
 
     #[test]
     fn test_save_crlf_restoration() {
-        let temp_file = NamedTempFile::new().unwrap();
+        let temp_file = create_temp_file("");
         let content = "Line1\nLine2\nLine3";
         let context = SaveContext {
             original_encoding: Encoding::Utf8,
@@ -486,6 +504,8 @@ mod tests {
 
         let saved_content = std::fs::read_to_string(&temp_file).unwrap();
         assert_eq!(saved_content, "Line1\r\nLine2\r\nLine3");
+
+        cleanup_temp_file(&temp_file);
     }
 
     #[test]
