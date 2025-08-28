@@ -1,5 +1,5 @@
 use crossterm::style::{Color, Stylize};
-use niv_config::{ColorScheme, SyntaxColors, UiSettings, Color as ConfigColor};
+use niv_config::{Color as ConfigColor, ColorScheme, SyntaxColors, UiSettings};
 
 /// Terminal theme for TUI rendering
 #[derive(Debug, Clone)]
@@ -28,7 +28,11 @@ impl TerminalTheme {
 
     /// Convert hex color to crossterm Color
     pub fn hex_to_color(hex: ConfigColor) -> Color {
-        Color::Rgb { r: hex.r, g: hex.g, b: hex.b }
+        Color::Rgb {
+            r: hex.r,
+            g: hex.g,
+            b: hex.b,
+        }
     }
 
     /// Get background color

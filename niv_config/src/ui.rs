@@ -20,16 +20,19 @@ impl Color {
         let hex = hex.trim_start_matches('#');
         if hex.len() != 6 {
             return Err(crate::error::ConfigError::Validation(
-                "Color must be 6 hex digits".to_string()
+                "Color must be 6 hex digits".to_string(),
             ));
         }
 
-        let r = u8::from_str_radix(&hex[0..2], 16)
-            .map_err(|_| crate::error::ConfigError::Validation("Invalid red component".to_string()))?;
-        let g = u8::from_str_radix(&hex[2..4], 16)
-            .map_err(|_| crate::error::ConfigError::Validation("Invalid green component".to_string()))?;
-        let b = u8::from_str_radix(&hex[4..6], 16)
-            .map_err(|_| crate::error::ConfigError::Validation("Invalid blue component".to_string()))?;
+        let r = u8::from_str_radix(&hex[0..2], 16).map_err(|_| {
+            crate::error::ConfigError::Validation("Invalid red component".to_string())
+        })?;
+        let g = u8::from_str_radix(&hex[2..4], 16).map_err(|_| {
+            crate::error::ConfigError::Validation("Invalid green component".to_string())
+        })?;
+        let b = u8::from_str_radix(&hex[4..6], 16).map_err(|_| {
+            crate::error::ConfigError::Validation("Invalid blue component".to_string())
+        })?;
 
         Ok(Self::new(r, g, b))
     }
@@ -252,10 +255,22 @@ impl UiSettings {
     pub fn to_toml(&self) -> HashMap<String, TomlValue> {
         let mut values = HashMap::new();
 
-        values.insert("ui.color_scheme".to_string(), TomlValue::String(self.color_scheme.clone()));
-        values.insert("ui.font_family".to_string(), TomlValue::String(self.font_family.clone()));
-        values.insert("ui.font_size".to_string(), TomlValue::Integer(self.font_size as i64));
-        values.insert("ui.transparency".to_string(), TomlValue::Integer(self.transparency as i64));
+        values.insert(
+            "ui.color_scheme".to_string(),
+            TomlValue::String(self.color_scheme.clone()),
+        );
+        values.insert(
+            "ui.font_family".to_string(),
+            TomlValue::String(self.font_family.clone()),
+        );
+        values.insert(
+            "ui.font_size".to_string(),
+            TomlValue::Integer(self.font_size as i64),
+        );
+        values.insert(
+            "ui.transparency".to_string(),
+            TomlValue::Integer(self.transparency as i64),
+        );
 
         // Export boolean settings
         macro_rules! export_bool {

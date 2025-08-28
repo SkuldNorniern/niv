@@ -42,9 +42,7 @@ impl Layout {
 
     /// Check if a position is within the text area
     pub fn is_in_text_area(&self, col: u16, row: u16) -> bool {
-        col >= self.text_start_col
-            && col < self.width
-            && row < self.text_area_height
+        col >= self.text_start_col && col < self.width && row < self.text_area_height
     }
 
     /// Convert screen coordinates to text buffer coordinates
@@ -119,12 +117,16 @@ pub struct Rect {
 
 impl Rect {
     pub fn new(x: u16, y: u16, width: u16, height: u16) -> Self {
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     pub fn contains(&self, x: u16, y: u16) -> bool {
-        x >= self.x && x < self.x + self.width &&
-        y >= self.y && y < self.y + self.height
+        x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
     }
 
     pub fn right(&self) -> u16 {

@@ -4,10 +4,10 @@ use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use crate::bom::BomDetectionResult;
-use crate::encoding::Encoding;
 use super::eol::{EolType, restore_eol};
 use super::identity::FileIdentity;
+use crate::bom::BomDetectionResult;
+use crate::encoding::Encoding;
 
 /// Configuration for file saving operations
 #[derive(Debug, Clone)]
@@ -158,7 +158,10 @@ fn prepare_content_for_save(
 }
 
 /// Transcode UTF-8 content to the specified encoding.
-fn transcode_to_encoding(content: &[u8], encoding: Encoding) -> Result<Vec<u8>, crate::EncodingError> {
+fn transcode_to_encoding(
+    content: &[u8],
+    encoding: Encoding,
+) -> Result<Vec<u8>, crate::EncodingError> {
     match encoding {
         Encoding::Utf8 => Ok(content.to_vec()),
         Encoding::Utf16Le => encode_utf16le(content),
@@ -256,7 +259,10 @@ fn write_to_file(
 
     // Ensure all data is flushed to disk
     writer.flush().map_err(crate::EncodingError::Io)?;
-    writer.get_mut().sync_all().map_err(crate::EncodingError::Io)?;
+    writer
+        .get_mut()
+        .sync_all()
+        .map_err(crate::EncodingError::Io)?;
 
     Ok(bytes_written)
 }
@@ -264,7 +270,8 @@ fn write_to_file(
 /// Generate temp file path.
 fn get_temp_path(original_path: &Path, suffix: &str) -> PathBuf {
     let mut temp_path = original_path.to_path_buf();
-    let original_name = temp_path.file_name()
+    let original_name = temp_path
+        .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("file");
 
@@ -292,8 +299,7 @@ fn preserve_permissions(_source: &Path, _target: &Path) -> Result<(), crate::Enc
 
 /// Encode UTF-8 content to UTF-16LE.
 fn encode_utf16le(content: &[u8]) -> Result<Vec<u8>, crate::EncodingError> {
-    let utf8_str = std::str::from_utf8(content)
-        .map_err(|_| crate::EncodingError::BinaryFile)?;
+    let utf8_str = std::str::from_utf8(content).map_err(|_| crate::EncodingError::BinaryFile)?;
 
     let mut result = Vec::new();
     for code_unit in utf8_str.encode_utf16() {
@@ -304,8 +310,7 @@ fn encode_utf16le(content: &[u8]) -> Result<Vec<u8>, crate::EncodingError> {
 
 /// Encode UTF-8 content to UTF-16BE.
 fn encode_utf16be(content: &[u8]) -> Result<Vec<u8>, crate::EncodingError> {
-    let utf8_str = std::str::from_utf8(content)
-        .map_err(|_| crate::EncodingError::BinaryFile)?;
+    let utf8_str = std::str::from_utf8(content).map_err(|_| crate::EncodingError::BinaryFile)?;
 
     let mut result = Vec::new();
     for code_unit in utf8_str.encode_utf16() {
@@ -316,8 +321,7 @@ fn encode_utf16be(content: &[u8]) -> Result<Vec<u8>, crate::EncodingError> {
 
 /// Encode UTF-8 content to UTF-32LE.
 fn encode_utf32le(content: &[u8]) -> Result<Vec<u8>, crate::EncodingError> {
-    let utf8_str = std::str::from_utf8(content)
-        .map_err(|_| crate::EncodingError::BinaryFile)?;
+    let utf8_str = std::str::from_utf8(content).map_err(|_| crate::EncodingError::BinaryFile)?;
 
     let mut result = Vec::new();
     for ch in utf8_str.chars() {
@@ -328,8 +332,7 @@ fn encode_utf32le(content: &[u8]) -> Result<Vec<u8>, crate::EncodingError> {
 
 /// Encode UTF-8 content to UTF-32BE.
 fn encode_utf32be(content: &[u8]) -> Result<Vec<u8>, crate::EncodingError> {
-    let utf8_str = std::str::from_utf8(content)
-        .map_err(|_| crate::EncodingError::BinaryFile)?;
+    let utf8_str = std::str::from_utf8(content).map_err(|_| crate::EncodingError::BinaryFile)?;
 
     let mut result = Vec::new();
     for ch in utf8_str.chars() {
@@ -340,8 +343,7 @@ fn encode_utf32be(content: &[u8]) -> Result<Vec<u8>, crate::EncodingError> {
 
 /// Encode UTF-8 content to Latin encoding.
 fn encode_latin(content: &[u8], encoding: Encoding) -> Result<Vec<u8>, crate::EncodingError> {
-    let utf8_str = std::str::from_utf8(content)
-        .map_err(|_| crate::EncodingError::BinaryFile)?;
+    let utf8_str = std::str::from_utf8(content).map_err(|_| crate::EncodingError::BinaryFile)?;
 
     let mut result = Vec::new();
     for ch in utf8_str.chars() {
@@ -422,10 +424,13 @@ mod tests {
 
     fn create_temp_file(content: &str) -> std::path::PathBuf {
         let temp_dir = env::temp_dir();
-        let file_name = format!("test_save_{}.txt", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos());
+        let file_name = format!(
+            "test_save_{}.txt",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
         let temp_path = temp_dir.join(file_name);
         std::fs::write(&temp_path, content).unwrap();
         temp_path

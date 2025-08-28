@@ -123,7 +123,9 @@ impl ConfigLoader {
             config.save_to_file(path)?;
             Ok(())
         } else {
-            Err(ConfigError::Path("No configuration paths available".to_string()))
+            Err(ConfigError::Path(
+                "No configuration paths available".to_string(),
+            ))
         }
     }
 
@@ -184,7 +186,8 @@ impl ConfigLoader {
                 "extensions" => {
                     let mut values = config.extensions.to_toml();
                     values.insert(key.to_string(), value);
-                    config.extensions = crate::extensions::ExtensionManagerConfig::from_toml(&values)?;
+                    config.extensions =
+                        crate::extensions::ExtensionManagerConfig::from_toml(&values)?;
                 }
                 _ => {
                     // Custom value
@@ -216,7 +219,10 @@ impl ConfigLoader {
     }
 
     /// Helper method to convert config to values map
-    fn config_to_values(&self, config: &Config) -> std::collections::HashMap<String, crate::toml_parser::TomlValue> {
+    fn config_to_values(
+        &self,
+        config: &Config,
+    ) -> std::collections::HashMap<String, crate::toml_parser::TomlValue> {
         let mut values = std::collections::HashMap::new();
 
         // Add editor settings

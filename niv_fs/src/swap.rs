@@ -11,10 +11,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Errors that can occur during swap operations
 #[derive(Debug)]
@@ -221,15 +221,23 @@ impl SwapManager {
                 .as_secs(),
         };
 
-        self.active_swaps.insert(file_path.to_path_buf(), swap_content);
+        self.active_swaps
+            .insert(file_path.to_path_buf(), swap_content);
         self.edit_counts.insert(file_path.to_path_buf(), 0);
-        self.last_save.insert(file_path.to_path_buf(), Instant::now());
+        self.last_save
+            .insert(file_path.to_path_buf(), Instant::now());
 
         Ok(())
     }
 
     /// Update file content and check if swap should be saved
-    pub fn update_content(&mut self, file_path: &Path, new_content: &str, cursor: Option<CursorPosition>, viewport: Option<ViewportState>) -> SwapResult<bool> {
+    pub fn update_content(
+        &mut self,
+        file_path: &Path,
+        new_content: &str,
+        cursor: Option<CursorPosition>,
+        viewport: Option<ViewportState>,
+    ) -> SwapResult<bool> {
         let edit_count = self.edit_counts.entry(file_path.to_path_buf()).or_insert(0);
         *edit_count += 1;
 
@@ -255,7 +263,8 @@ impl SwapManager {
         let should_save = self.should_save_swap(file_path);
         if should_save {
             self.save_swap(file_path)?;
-            self.last_save.insert(file_path.to_path_buf(), Instant::now());
+            self.last_save
+                .insert(file_path.to_path_buf(), Instant::now());
         }
 
         Ok(should_save)
@@ -364,7 +373,8 @@ impl SwapManager {
 
     /// Get the swap file path for a given file
     fn get_swap_path(&self, file_path: &Path) -> SwapResult<PathBuf> {
-        let file_name = file_path.file_name()
+        let file_name = file_path
+            .file_name()
             .and_then(|n| n.to_str())
             .ok_or_else(|| SwapError::PathError("Invalid file name".to_string()))?;
 
@@ -386,13 +396,19 @@ impl SwapManager {
         }
 
         if let Some(cursor) = &content.cursor_position {
-            result.push_str(&format!("cursor={},{},{}\n", cursor.line, cursor.column, cursor.offset));
+            result.push_str(&format!(
+                "cursor={},{},{}\n",
+                cursor.line, cursor.column, cursor.offset
+            ));
         } else {
             result.push_str("cursor=\n");
         }
 
         if let Some(viewport) = &content.viewport_state {
-            result.push_str(&format!("viewport={},{},{}\n", viewport.top_line, viewport.visible_lines, viewport.horizontal_offset));
+            result.push_str(&format!(
+                "viewport={},{},{}\n",
+                viewport.top_line, viewport.visible_lines, viewport.horizontal_offset
+            ));
         } else {
             result.push_str("viewport=\n");
         }
@@ -433,12 +449,14 @@ impl SwapManager {
                 if !cursor_str.is_empty() {
                     let parts: Vec<&str> = cursor_str.split(',').collect();
                     if parts.len() == 3 {
-                        if let (Ok(line), Ok(column), Ok(offset)) = (
-                            parts[0].parse(),
-                            parts[1].parse(),
-                            parts[2].parse(),
-                        ) {
-                            cursor_position = Some(CursorPosition { line, column, offset });
+                        if let (Ok(line), Ok(column), Ok(offset)) =
+                            (parts[0].parse(), parts[1].parse(), parts[2].parse())
+                        {
+                            cursor_position = Some(CursorPosition {
+                                line,
+                                column,
+                                offset,
+                            });
                         }
                     }
                 }
@@ -447,11 +465,9 @@ impl SwapManager {
                 if !viewport_str.is_empty() {
                     let parts: Vec<&str> = viewport_str.split(',').collect();
                     if parts.len() == 3 {
-                        if let (Ok(top_line), Ok(visible_lines), Ok(horizontal_offset)) = (
-                            parts[0].parse(),
-                            parts[1].parse(),
-                            parts[2].parse(),
-                        ) {
+                        if let (Ok(top_line), Ok(visible_lines), Ok(horizontal_offset)) =
+                            (parts[0].parse(), parts[1].parse(), parts[2].parse())
+                        {
                             viewport_state = Some(ViewportState {
                                 top_line,
                                 visible_lines,
@@ -512,7 +528,12 @@ impl DraftManager {
     }
 
     /// Save untitled buffer as draft
-    pub fn save_draft(&self, content: &str, cursor: Option<CursorPosition>, viewport: Option<ViewportState>) -> DraftResult<PathBuf> {
+    pub fn save_draft(
+        &self,
+        content: &str,
+        cursor: Option<CursorPosition>,
+        viewport: Option<ViewportState>,
+    ) -> DraftResult<PathBuf> {
         // Generate UUID-like identifier
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -587,13 +608,19 @@ impl DraftManager {
         }
 
         if let Some(cursor) = &content.cursor_position {
-            result.push_str(&format!("cursor={},{},{}\n", cursor.line, cursor.column, cursor.offset));
+            result.push_str(&format!(
+                "cursor={},{},{}\n",
+                cursor.line, cursor.column, cursor.offset
+            ));
         } else {
             result.push_str("cursor=\n");
         }
 
         if let Some(viewport) = &content.viewport_state {
-            result.push_str(&format!("viewport={},{},{}\n", viewport.top_line, viewport.visible_lines, viewport.horizontal_offset));
+            result.push_str(&format!(
+                "viewport={},{},{}\n",
+                viewport.top_line, viewport.visible_lines, viewport.horizontal_offset
+            ));
         } else {
             result.push_str("viewport=\n");
         }
@@ -634,12 +661,14 @@ impl DraftManager {
                 if !cursor_str.is_empty() {
                     let parts: Vec<&str> = cursor_str.split(',').collect();
                     if parts.len() == 3 {
-                        if let (Ok(line), Ok(column), Ok(offset)) = (
-                            parts[0].parse(),
-                            parts[1].parse(),
-                            parts[2].parse(),
-                        ) {
-                            cursor_position = Some(CursorPosition { line, column, offset });
+                        if let (Ok(line), Ok(column), Ok(offset)) =
+                            (parts[0].parse(), parts[1].parse(), parts[2].parse())
+                        {
+                            cursor_position = Some(CursorPosition {
+                                line,
+                                column,
+                                offset,
+                            });
                         }
                     }
                 }
@@ -648,11 +677,9 @@ impl DraftManager {
                 if !viewport_str.is_empty() {
                     let parts: Vec<&str> = viewport_str.split(',').collect();
                     if parts.len() == 3 {
-                        if let (Ok(top_line), Ok(visible_lines), Ok(horizontal_offset)) = (
-                            parts[0].parse(),
-                            parts[1].parse(),
-                            parts[2].parse(),
-                        ) {
+                        if let (Ok(top_line), Ok(visible_lines), Ok(horizontal_offset)) =
+                            (parts[0].parse(), parts[1].parse(), parts[2].parse())
+                        {
                             viewport_state = Some(ViewportState {
                                 top_line,
                                 visible_lines,

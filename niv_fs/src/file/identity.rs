@@ -41,7 +41,10 @@ pub struct FileIdentity {
 
 impl FileIdentity {
     /// Create a new file identity from a path.
-    pub fn from_path<P: AsRef<Path>>(path: P, config: &FileIdentityConfig) -> std::io::Result<Self> {
+    pub fn from_path<P: AsRef<Path>>(
+        path: P,
+        config: &FileIdentityConfig,
+    ) -> std::io::Result<Self> {
         Self::from_path_with_hash(path, config, config.use_fast_hash)
     }
 
@@ -118,7 +121,10 @@ impl FileIdentity {
     }
 
     /// Compute a fast rolling hash of the file content.
-    fn compute_fast_hash<P: AsRef<Path>>(path: P, sample_size: usize) -> std::io::Result<Option<u64>> {
+    fn compute_fast_hash<P: AsRef<Path>>(
+        path: P,
+        sample_size: usize,
+    ) -> std::io::Result<Option<u64>> {
         use std::fs::File;
         use std::io::Read;
 
@@ -145,7 +151,8 @@ impl FileIdentity {
         // Rolling hash for remaining bytes
         for i in 8..bytes_read {
             rolling = (rolling * base + buffer[i] as u64) % modulos;
-            rolling = (rolling + modulos - (buffer[i - 8] as u64 * base.pow(7) % modulos)) % modulos;
+            rolling =
+                (rolling + modulos - (buffer[i - 8] as u64 * base.pow(7) % modulos)) % modulos;
             hash ^= rolling;
         }
 
@@ -160,10 +167,13 @@ mod tests {
 
     fn create_temp_file(content: &[u8]) -> std::path::PathBuf {
         let temp_dir = env::temp_dir();
-        let file_name = format!("test_identity_{}.txt", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos());
+        let file_name = format!(
+            "test_identity_{}.txt",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
         let temp_path = temp_dir.join(file_name);
         std::fs::write(&temp_path, content).unwrap();
         temp_path

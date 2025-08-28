@@ -1,12 +1,12 @@
 use crate::error::{ConfigError, ConfigResult};
-use crate::settings::EditorSettings;
-use crate::ui::UiSettings;
-use crate::keybindings::KeyBindingConfig;
 use crate::extensions::ExtensionManagerConfig;
+use crate::keybindings::KeyBindingConfig;
+use crate::settings::EditorSettings;
 use crate::toml_parser::{TomlParser, TomlValue};
+use crate::ui::UiSettings;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Main configuration structure for niv editor
 #[derive(Debug, Clone)]
@@ -51,12 +51,13 @@ impl Config {
             ui: UiSettings::from_toml(&values)?,
             keybindings: KeyBindingConfig::from_toml(&values)?,
             extensions: ExtensionManagerConfig::from_toml(&values)?,
-            custom: values.into_iter()
+            custom: values
+                .into_iter()
                 .filter(|(k, _)| {
-                    !k.starts_with("editor.") &&
-                    !k.starts_with("ui.") &&
-                    !k.starts_with("keybindings.") &&
-                    !k.starts_with("extensions.")
+                    !k.starts_with("editor.")
+                        && !k.starts_with("ui.")
+                        && !k.starts_with("keybindings.")
+                        && !k.starts_with("extensions.")
                 })
                 .collect(),
         })
@@ -93,9 +94,15 @@ impl Config {
             if parts.len() >= 2 {
                 let section = parts[0];
                 let subsection = parts[1..].join(".");
-                sections.entry(section).or_insert_with(Vec::new).push((subsection, value.clone()));
+                sections
+                    .entry(section)
+                    .or_insert_with(Vec::new)
+                    .push((subsection, value.clone()));
             } else {
-                sections.entry("").or_insert_with(Vec::new).push((key.clone(), value.clone()));
+                sections
+                    .entry("")
+                    .or_insert_with(Vec::new)
+                    .push((key.clone(), value.clone()));
             }
         }
 
@@ -140,7 +147,12 @@ impl Config {
         // User-specific config
         if let Some(home) = std::env::var_os("HOME") {
             paths.push(PathBuf::from(&home).join(".niv").join("config.toml"));
-            paths.push(PathBuf::from(&home).join(".config").join("niv").join("config.toml"));
+            paths.push(
+                PathBuf::from(&home)
+                    .join(".config")
+                    .join("niv")
+                    .join("config.toml"),
+            );
         }
 
         // System-wide config
@@ -215,15 +227,21 @@ impl Config {
     pub fn validate(&self) -> ConfigResult<()> {
         // Validate editor settings
         if self.editor.tab_width == 0 {
-            return Err(ConfigError::Validation("Tab width must be greater than 0".to_string()));
+            return Err(ConfigError::Validation(
+                "Tab width must be greater than 0".to_string(),
+            ));
         }
         if self.editor.scrolloff > 100 {
-            return Err(ConfigError::Validation("Scroll offset too large".to_string()));
+            return Err(ConfigError::Validation(
+                "Scroll offset too large".to_string(),
+            ));
         }
 
         // Validate UI settings
         if self.ui.transparency > 100 {
-            return Err(ConfigError::Validation("Transparency must be between 0 and 100".to_string()));
+            return Err(ConfigError::Validation(
+                "Transparency must be between 0 and 100".to_string(),
+            ));
         }
 
         // Configuration is valid

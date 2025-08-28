@@ -41,5 +41,3 @@ pub fn detect_utf16_pattern(bytes: &[u8]) -> Option<Encoding> {
     }
     None
 }
-
-

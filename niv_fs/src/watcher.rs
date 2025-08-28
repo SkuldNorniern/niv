@@ -35,7 +35,9 @@ impl std::fmt::Display for WatcherError {
             WatcherError::Io(err) => write!(f, "I/O error: {}", err),
             WatcherError::PathError(msg) => write!(f, "Path error: {}", msg),
             WatcherError::WatcherStopped => write!(f, "Watcher has been stopped"),
-            WatcherError::ConflictResolutionFailed(msg) => write!(f, "Conflict resolution failed: {}", msg),
+            WatcherError::ConflictResolutionFailed(msg) => {
+                write!(f, "Conflict resolution failed: {}", msg)
+            }
             WatcherError::IdentityError(msg) => write!(f, "Identity error: {}", msg),
         }
     }
@@ -237,7 +239,12 @@ impl FileWatcher {
     }
 
     /// Watch a file with initial content and identity
-    pub fn watch_file(&self, path: &Path, initial_content: &str, initial_identity: FileIdentity) -> WatcherResult<()> {
+    pub fn watch_file(
+        &self,
+        path: &Path,
+        initial_content: &str,
+        initial_identity: FileIdentity,
+    ) -> WatcherResult<()> {
         let mut watched_files = self.watched_files.lock().unwrap();
 
         let file_state = FileState {
@@ -314,7 +321,11 @@ impl FileWatcher {
     }
 
     /// Handle potential merge conflict
-    pub fn handle_conflict(&self, path: &Path, buffer_content: &str) -> WatcherResult<Option<MergeConflict>> {
+    pub fn handle_conflict(
+        &self,
+        path: &Path,
+        buffer_content: &str,
+    ) -> WatcherResult<Option<MergeConflict>> {
         let watched_files = self.watched_files.lock().unwrap();
 
         if let Some(file_state) = watched_files.get(path) {
@@ -331,12 +342,14 @@ impl FileWatcher {
                 };
 
                 // Find base content (last common ancestor)
-                let base_content = file_state.snapshots
+                let base_content = file_state
+                    .snapshots
                     .last()
                     .map(|s| s.content.clone())
                     .unwrap_or_else(|| file_state.base_content.clone());
 
-                let base_identity = file_state.snapshots
+                let base_identity = file_state
+                    .snapshots
                     .last()
                     .map(|s| s.identity.clone())
                     .unwrap_or_else(|| file_state.identity.clone());
@@ -362,7 +375,11 @@ impl FileWatcher {
     }
 
     /// Resolve a merge conflict
-    pub fn resolve_conflict(&self, conflict: &MergeConflict, resolution: ConflictResolution) -> WatcherResult<String> {
+    pub fn resolve_conflict(
+        &self,
+        conflict: &MergeConflict,
+        resolution: ConflictResolution,
+    ) -> WatcherResult<String> {
         match resolution {
             ConflictResolution::UseBuffer => {
                 // Overwrite disk with buffer content
@@ -379,9 +396,9 @@ impl FileWatcher {
                 fs::write(&new_path, &conflict.buffer_content)?;
                 Ok(conflict.disk_content.clone())
             }
-            ConflictResolution::Manual => {
-                Err(WatcherError::ConflictResolutionFailed("Manual resolution required".to_string()))
-            }
+            ConflictResolution::Manual => Err(WatcherError::ConflictResolutionFailed(
+                "Manual resolution required".to_string(),
+            )),
         }
     }
 
@@ -438,8 +455,12 @@ impl FileWatcher {
                             if now.duration_since(*timestamp) >= config.debounce_delay {
                                 let event = match change.change_type {
                                     ChangeType::Modified => WatchEvent::FileChanged(change.clone()),
-                                    ChangeType::Created => WatchEvent::FileCreated(change.path.clone()),
-                                    ChangeType::Deleted => WatchEvent::FileDeleted(change.path.clone()),
+                                    ChangeType::Created => {
+                                        WatchEvent::FileCreated(change.path.clone())
+                                    }
+                                    ChangeType::Deleted => {
+                                        WatchEvent::FileDeleted(change.path.clone())
+                                    }
                                     ChangeType::Renamed => WatchEvent::FileRenamed {
                                         from: change.path.clone(),
                                         to: change.path.clone(),
@@ -467,7 +488,10 @@ impl FileWatcher {
     }
 
     /// Check if a file has changed
-    fn check_file_change(file_path: &Path, last_check: &HashMap<PathBuf, SystemTime>) -> WatcherResult<Option<FileChange>> {
+    fn check_file_change(
+        file_path: &Path,
+        last_check: &HashMap<PathBuf, SystemTime>,
+    ) -> WatcherResult<Option<FileChange>> {
         let metadata = match fs::metadata(file_path) {
             Ok(meta) => meta,
             Err(_) => {

@@ -56,5 +56,3 @@ pub fn detect_bom(bytes: &[u8]) -> BomDetectionResult {
         bom_length: 0,
     }
 }
-
-

@@ -22,20 +22,18 @@ pub use encoding::{
     detect_encoding_heuristic, detect_encoding_heuristic_with_confidence,
 };
 pub use file::{
-    FileLoadResult, FileLoadConfig, load_file, load_file_with_config,
-    FileSaveResult, FileSaveConfig, save_file, save_file_with_config,
-    SaveContext, FileIdentity, FileIdentityConfig,
+    FileIdentity, FileIdentityConfig, FileLoadConfig, FileLoadResult, FileSaveConfig,
+    FileSaveResult, SaveContext,
     eol::{EolType, normalize_eol, restore_eol},
+    load_file, load_file_with_config, save_file, save_file_with_config,
 };
 pub use swap::{
-    SwapManager, SwapConfig, SwapFile, SwapStatus, DraftManager,
-    SwapError, DraftError, SwapResult, DraftResult,
-    CursorPosition, ViewportState,
+    CursorPosition, DraftError, DraftManager, DraftResult, SwapConfig, SwapError, SwapFile,
+    SwapManager, SwapResult, SwapStatus, ViewportState,
 };
 pub use watcher::{
-    FileWatcher, WatcherConfig, WatchEvent, FileChange, ChangeType,
-    MergeConflict, ConflictResolution, WatcherError, WatcherResult,
-    FileState, FileSnapshot,
+    ChangeType, ConflictResolution, FileChange, FileSnapshot, FileState, FileWatcher,
+    MergeConflict, WatchEvent, WatcherConfig, WatcherError, WatcherResult,
 };
 
 use std::fmt;

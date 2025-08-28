@@ -59,9 +59,7 @@ impl Default for ExtensionManagerConfig {
             ],
             auto_load: true,
             allow_network: true,
-            trusted_sources: vec![
-                "https://github.com/niv-editor/extensions".to_string(),
-            ],
+            trusted_sources: vec!["https://github.com/niv-editor/extensions".to_string()],
             update_policy: UpdatePolicy::Stable,
             extensions: HashMap::new(),
         }
@@ -111,9 +109,12 @@ impl ExtensionManagerConfig {
                     "stable" => UpdatePolicy::Stable,
                     "latest" => UpdatePolicy::Latest,
                     "prompt" => UpdatePolicy::Prompt,
-                    _ => return Err(crate::error::ConfigError::Validation(
-                        format!("Unknown update policy: {}", policy_str)
-                    )),
+                    _ => {
+                        return Err(crate::error::ConfigError::Validation(format!(
+                            "Unknown update policy: {}",
+                            policy_str
+                        )));
+                    }
                 };
             }
         }
@@ -165,10 +166,9 @@ impl ExtensionManagerConfig {
                             "path" => ext_config.path = Some(val.to_string()),
                             "repository" => ext_config.repository = Some(val.to_string()),
                             _ => {
-                                ext_config.settings.insert(
-                                    key.to_string(),
-                                    TomlValue::String(val.to_string())
-                                );
+                                ext_config
+                                    .settings
+                                    .insert(key.to_string(), TomlValue::String(val.to_string()));
                             }
                         }
                     }
@@ -184,8 +184,14 @@ impl ExtensionManagerConfig {
         let mut values = HashMap::new();
 
         // Export basic settings
-        values.insert("extensions.auto_load".to_string(), TomlValue::Bool(self.auto_load));
-        values.insert("extensions.allow_network".to_string(), TomlValue::Bool(self.allow_network));
+        values.insert(
+            "extensions.auto_load".to_string(),
+            TomlValue::Bool(self.auto_load),
+        );
+        values.insert(
+            "extensions.allow_network".to_string(),
+            TomlValue::Bool(self.allow_network),
+        );
 
         // Export update policy
         let policy_str = match self.update_policy {
@@ -194,21 +200,32 @@ impl ExtensionManagerConfig {
             UpdatePolicy::Latest => "latest",
             UpdatePolicy::Prompt => "prompt",
         };
-        values.insert("extensions.update_policy".to_string(), TomlValue::String(policy_str.to_string()));
+        values.insert(
+            "extensions.update_policy".to_string(),
+            TomlValue::String(policy_str.to_string()),
+        );
 
         // Export directories
-        let dir_array = self.directories
+        let dir_array = self
+            .directories
             .iter()
             .map(|d| TomlValue::String(d.clone()))
             .collect();
-        values.insert("extensions.directories".to_string(), TomlValue::Array(dir_array));
+        values.insert(
+            "extensions.directories".to_string(),
+            TomlValue::Array(dir_array),
+        );
 
         // Export trusted sources
-        let source_array = self.trusted_sources
+        let source_array = self
+            .trusted_sources
             .iter()
             .map(|s| TomlValue::String(s.clone()))
             .collect();
-        values.insert("extensions.trusted_sources".to_string(), TomlValue::Array(source_array));
+        values.insert(
+            "extensions.trusted_sources".to_string(),
+            TomlValue::Array(source_array),
+        );
 
         // Export extensions
         for (name, ext_config) in &self.extensions {
@@ -234,7 +251,7 @@ impl ExtensionManagerConfig {
 
             values.insert(
                 format!("extensions.{}", name),
-                TomlValue::Array(ext_settings)
+                TomlValue::Array(ext_settings),
             );
         }
 
@@ -273,10 +290,7 @@ impl ExtensionManagerConfig {
 
     /// Get all enabled extensions
     pub fn enabled_extensions(&self) -> Vec<&ExtensionConfig> {
-        self.extensions
-            .values()
-            .filter(|ext| ext.enabled)
-            .collect()
+        self.extensions.values().filter(|ext| ext.enabled).collect()
     }
 }
 

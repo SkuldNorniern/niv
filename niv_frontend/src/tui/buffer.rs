@@ -1,6 +1,6 @@
-use niv_rope::Rope;
 use niv_config::EditorSettings;
 use niv_fs::SaveContext;
+use niv_rope::Rope;
 use std::path::PathBuf;
 
 /// Text buffer for TUI display
@@ -403,8 +403,6 @@ impl TextBuffer {
         }
     }
 
-
-
     /// Adjust scroll position to keep cursor visible
     fn adjust_scroll(&mut self) {
         let cursor_screen_line = self.cursor_line.saturating_sub(self.scroll_line);
@@ -427,7 +425,8 @@ impl TextBuffer {
 
     /// Get buffer status string
     pub fn status(&self, config: &EditorSettings) -> String {
-        let file_name = self.file_path
+        let file_name = self
+            .file_path
             .as_ref()
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().to_string())

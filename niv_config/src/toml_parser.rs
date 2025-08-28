@@ -126,7 +126,9 @@ impl TomlValue {
     pub fn as_integer(&self) -> ConfigResult<i64> {
         match self {
             TomlValue::Integer(i) => Ok(*i),
-            _ => Err(ConfigError::Validation("Expected integer value".to_string())),
+            _ => Err(ConfigError::Validation(
+                "Expected integer value".to_string(),
+            )),
         }
     }
 
@@ -142,7 +144,9 @@ impl TomlValue {
     pub fn as_bool(&self) -> ConfigResult<bool> {
         match self {
             TomlValue::Bool(b) => Ok(*b),
-            _ => Err(ConfigError::Validation("Expected boolean value".to_string())),
+            _ => Err(ConfigError::Validation(
+                "Expected boolean value".to_string(),
+            )),
         }
     }
 

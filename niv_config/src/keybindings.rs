@@ -71,7 +71,18 @@ impl KeyModifiers {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum KeyCode {
     Char(char),
-    F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
+    F1,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
     Escape,
     Enter,
     Tab,
@@ -216,52 +227,130 @@ impl KeyBindingConfig {
         let normal = &mut self.normal;
 
         // Movement
-        normal.insert(KeyBinding::simple(KeyCode::Char('h')), EditorCommand::MoveLeft);
-        normal.insert(KeyBinding::simple(KeyCode::Char('j')), EditorCommand::MoveDown);
-        normal.insert(KeyBinding::simple(KeyCode::Char('k')), EditorCommand::MoveUp);
-        normal.insert(KeyBinding::simple(KeyCode::Char('l')), EditorCommand::MoveRight);
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('h')),
+            EditorCommand::MoveLeft,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('j')),
+            EditorCommand::MoveDown,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('k')),
+            EditorCommand::MoveUp,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('l')),
+            EditorCommand::MoveRight,
+        );
 
-        normal.insert(KeyBinding::simple(KeyCode::Char('0')), EditorCommand::MoveLineStart);
-        normal.insert(KeyBinding::simple(KeyCode::Char('$')), EditorCommand::MoveLineEnd);
-        normal.insert(KeyBinding::ctrl(KeyCode::Char('b')), EditorCommand::MovePageUp);
-        normal.insert(KeyBinding::ctrl(KeyCode::Char('f')), EditorCommand::MovePageDown);
-        normal.insert(KeyBinding::simple(KeyCode::Char('w')), EditorCommand::MoveWordNext);
-        normal.insert(KeyBinding::simple(KeyCode::Char('b')), EditorCommand::MoveWordPrev);
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('0')),
+            EditorCommand::MoveLineStart,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('$')),
+            EditorCommand::MoveLineEnd,
+        );
+        normal.insert(
+            KeyBinding::ctrl(KeyCode::Char('b')),
+            EditorCommand::MovePageUp,
+        );
+        normal.insert(
+            KeyBinding::ctrl(KeyCode::Char('f')),
+            EditorCommand::MovePageDown,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('w')),
+            EditorCommand::MoveWordNext,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('b')),
+            EditorCommand::MoveWordPrev,
+        );
 
         // Editing
-        normal.insert(KeyBinding::simple(KeyCode::Char('i')), EditorCommand::Insert);
-        normal.insert(KeyBinding::simple(KeyCode::Char('O')), EditorCommand::InsertLineAbove);
-        normal.insert(KeyBinding::simple(KeyCode::Char('o')), EditorCommand::InsertLineBelow);
-        normal.insert(KeyBinding::simple(KeyCode::Char('x')), EditorCommand::Delete);
-        normal.insert(KeyBinding::simple(KeyCode::Char('d')), EditorCommand::DeleteLine);
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('i')),
+            EditorCommand::Insert,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('O')),
+            EditorCommand::InsertLineAbove,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('o')),
+            EditorCommand::InsertLineBelow,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('x')),
+            EditorCommand::Delete,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('d')),
+            EditorCommand::DeleteLine,
+        );
         normal.insert(KeyBinding::simple(KeyCode::Char('u')), EditorCommand::Undo);
         normal.insert(KeyBinding::ctrl(KeyCode::Char('r')), EditorCommand::Redo);
 
         // Search
-        normal.insert(KeyBinding::simple(KeyCode::Char('/')), EditorCommand::Search);
-        normal.insert(KeyBinding::simple(KeyCode::Char('n')), EditorCommand::SearchNext);
-        normal.insert(KeyBinding::simple(KeyCode::Char('N')), EditorCommand::SearchPrev);
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('/')),
+            EditorCommand::Search,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('n')),
+            EditorCommand::SearchNext,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('N')),
+            EditorCommand::SearchPrev,
+        );
 
         // Files
         normal.insert(KeyBinding::ctrl(KeyCode::Char('s')), EditorCommand::Save);
-        normal.insert(KeyBinding::simple(KeyCode::Char(':')), EditorCommand::CommandMode);
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char(':')),
+            EditorCommand::CommandMode,
+        );
 
         // Modes
-        normal.insert(KeyBinding::simple(KeyCode::Char('v')), EditorCommand::VisualMode);
-        normal.insert(KeyBinding::simple(KeyCode::Escape), EditorCommand::NormalMode);
+        normal.insert(
+            KeyBinding::simple(KeyCode::Char('v')),
+            EditorCommand::VisualMode,
+        );
+        normal.insert(
+            KeyBinding::simple(KeyCode::Escape),
+            EditorCommand::NormalMode,
+        );
 
         // Global bindings
-        self.global.insert(KeyBinding::ctrl(KeyCode::Char('c')), EditorCommand::Quit);
-        self.global.insert(KeyBinding::ctrl(KeyCode::Char('q')), EditorCommand::ForceQuit);
+        self.global
+            .insert(KeyBinding::ctrl(KeyCode::Char('c')), EditorCommand::Quit);
+        self.global.insert(
+            KeyBinding::ctrl(KeyCode::Char('q')),
+            EditorCommand::ForceQuit,
+        );
 
         // Insert mode
-        self.insert.insert(KeyBinding::simple(KeyCode::Escape), EditorCommand::NormalMode);
-        self.insert.insert(KeyBinding::ctrl(KeyCode::Char('c')), EditorCommand::NormalMode);
+        self.insert.insert(
+            KeyBinding::simple(KeyCode::Escape),
+            EditorCommand::NormalMode,
+        );
+        self.insert.insert(
+            KeyBinding::ctrl(KeyCode::Char('c')),
+            EditorCommand::NormalMode,
+        );
 
         // Visual mode
-        self.visual.insert(KeyBinding::simple(KeyCode::Char('y')), EditorCommand::Copy);
-        self.visual.insert(KeyBinding::simple(KeyCode::Char('d')), EditorCommand::Cut);
-        self.visual.insert(KeyBinding::simple(KeyCode::Escape), EditorCommand::NormalMode);
+        self.visual
+            .insert(KeyBinding::simple(KeyCode::Char('y')), EditorCommand::Copy);
+        self.visual
+            .insert(KeyBinding::simple(KeyCode::Char('d')), EditorCommand::Cut);
+        self.visual.insert(
+            KeyBinding::simple(KeyCode::Escape),
+            EditorCommand::NormalMode,
+        );
     }
 
     /// Parse keybinding from string (e.g., "Ctrl+S", "F1", "g")
@@ -279,9 +368,12 @@ impl KeyBindingConfig {
                     "alt" => modifiers.alt = true,
                     "shift" => modifiers.shift = true,
                     "meta" | "super" | "win" | "cmd" => modifiers.meta = true,
-                    _ => return Err(crate::error::ConfigError::Validation(
-                        format!("Unknown modifier: {}", mod_str)
-                    )),
+                    _ => {
+                        return Err(crate::error::ConfigError::Validation(format!(
+                            "Unknown modifier: {}",
+                            mod_str
+                        )));
+                    }
                 }
             }
 
@@ -327,9 +419,10 @@ impl KeyBindingConfig {
                 let ch = s.chars().next().unwrap();
                 Ok(KeyCode::Char(ch))
             }
-            _ => Err(crate::error::ConfigError::Validation(
-                format!("Unknown key: {}", key_str)
-            )),
+            _ => Err(crate::error::ConfigError::Validation(format!(
+                "Unknown key: {}",
+                key_str
+            ))),
         }
     }
 
@@ -412,9 +505,10 @@ impl KeyBindingConfig {
                 let custom_cmd = cmd.strip_prefix("custom:").unwrap().to_string();
                 Ok(EditorCommand::Custom(custom_cmd))
             }
-            _ => Err(crate::error::ConfigError::Validation(
-                format!("Unknown command: {}", command_str)
-            )),
+            _ => Err(crate::error::ConfigError::Validation(format!(
+                "Unknown command: {}",
+                command_str
+            ))),
         }
     }
 }

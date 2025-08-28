@@ -5,10 +5,10 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
-use crate::bom::detect_bom;
-use crate::encoding::{detect_encoding_heuristic, DetectionConfig, Encoding};
-use super::eol::{normalize_eol, EolType};
+use super::eol::{EolType, normalize_eol};
 use super::identity::{FileIdentity, FileIdentityConfig};
+use crate::bom::detect_bom;
+use crate::encoding::{DetectionConfig, Encoding, detect_encoding_heuristic};
 
 /// Configuration for file loading operations
 #[derive(Debug, Clone)]
@@ -28,7 +28,7 @@ pub struct FileLoadConfig {
 impl Default for FileLoadConfig {
     fn default() -> Self {
         FileLoadConfig {
-            chunk_size: 8 * 1024 * 1024, // 8MB
+            chunk_size: 8 * 1024 * 1024,  // 8MB
             max_line_length: 1024 * 1024, // 1MB
             use_mmap: true,
             encoding_config: DetectionConfig::default(),
@@ -74,11 +74,12 @@ pub fn load_file_with_config<P: AsRef<Path>>(
     let path = path.as_ref();
 
     // First, capture file identity
-    let identity = FileIdentity::from_path(path, &config.identity_config)
-        .map_err(crate::EncodingError::Io)?;
+    let identity =
+        FileIdentity::from_path(path, &config.identity_config).map_err(crate::EncodingError::Io)?;
 
     // Check if file is too large to load entirely
-    if identity.size > 100 * 1024 * 1024 { // 100MB threshold
+    if identity.size > 100 * 1024 * 1024 {
+        // 100MB threshold
         return Ok(FileLoadResult {
             content: String::new(),
             original_encoding: Encoding::Unknown,
@@ -127,7 +128,10 @@ pub fn load_file_with_config<P: AsRef<Path>>(
             original_eol: EolType::Lf,
             identity,
             read_only: true,
-            warnings: vec![format!("Extremely long lines detected (>{} bytes), opened as read-only", config.max_line_length)],
+            warnings: vec![format!(
+                "Extremely long lines detected (>{} bytes), opened as read-only",
+                config.max_line_length
+            )],
         });
     }
 
@@ -136,7 +140,10 @@ pub fn load_file_with_config<P: AsRef<Path>>(
     let encoding = if bom_result.encoding != Encoding::Unknown {
         bom_result.encoding
     } else {
-        detect_encoding_heuristic(&sample[bom_result.bom_length..], config.encoding_config.clone())?
+        detect_encoding_heuristic(
+            &sample[bom_result.bom_length..],
+            config.encoding_config.clone(),
+        )?
     };
 
     // Load full content
@@ -145,8 +152,9 @@ pub fn load_file_with_config<P: AsRef<Path>>(
 
     // Decode content based on encoding
     let decoded_content = match encoding {
-        Encoding::Utf8 => String::from_utf8(raw_content.to_vec())
-            .map_err(|_| crate::EncodingError::BinaryFile)?,
+        Encoding::Utf8 => {
+            String::from_utf8(raw_content.to_vec()).map_err(|_| crate::EncodingError::BinaryFile)?
+        }
         Encoding::Utf16Le => decode_utf16le(raw_content)?,
         Encoding::Utf16Be => decode_utf16be(raw_content)?,
         Encoding::Utf32Le => decode_utf32le(raw_content)?,
@@ -246,9 +254,8 @@ fn decode_utf16le(bytes: &[u8]) -> Result<String, crate::EncodingError> {
         return Err(crate::EncodingError::BinaryFile);
     }
 
-    let u16_slice = unsafe {
-        std::slice::from_raw_parts(bytes.as_ptr() as *const u16, bytes.len() / 2)
-    };
+    let u16_slice =
+        unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u16, bytes.len() / 2) };
 
     String::from_utf16(u16_slice).map_err(|_| crate::EncodingError::BinaryFile)
 }
@@ -274,9 +281,8 @@ fn decode_utf32le(bytes: &[u8]) -> Result<String, crate::EncodingError> {
         return Err(crate::EncodingError::BinaryFile);
     }
 
-    let u32_slice = unsafe {
-        std::slice::from_raw_parts(bytes.as_ptr() as *const u32, bytes.len() / 4)
-    };
+    let u32_slice =
+        unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u32, bytes.len() / 4) };
 
     let mut result = String::new();
     for &code in u32_slice {
@@ -404,10 +410,13 @@ mod tests {
 
     fn create_temp_file(content: &str) -> std::path::PathBuf {
         let temp_dir = env::temp_dir();
-        let file_name = format!("test_file_{}.txt", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos());
+        let file_name = format!(
+            "test_file_{}.txt",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
         let temp_path = temp_dir.join(file_name);
         std::fs::write(&temp_path, content).unwrap();
         temp_path
