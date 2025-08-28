@@ -1,0 +1,11 @@
+[package]
+name = "niv_frontend"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+crossterm = "0.29.0"
+tokio = "1.47.1"
+niv_config = { version = "0.1.0", path = "../niv_config" }
+niv_rope = { version = "0.1.0", path = "../niv_rope" }
+niv_fs = { version = "0.1.0", path = "../niv_fs" }
