@@ -144,63 +144,50 @@ impl TextBuffer {
 
     /// Get visible lines
     pub fn visible_lines(&self) -> Vec<String> {
-        let lines: Vec<&str> = self.content.lines().collect();
+        let raw_lines: Vec<&str> = self.content.lines().collect();
+        let has_any_content = !self.content.is_empty();
 
-        // If content is empty, return empty vec
-        if lines.is_empty() && self.content.is_empty() {
-            return vec![String::new()];
-        }
-
-        // If content has lines but split gave empty vec, it means one line with no newline
-        let lines = if lines.is_empty() && !self.content.is_empty() {
-            vec![self.content.as_str()]
-        } else {
-            lines
-        };
+        // Treat empty buffer as a single empty line for rendering
+        let lines: Vec<&str> = if raw_lines.is_empty() {
+            if has_any_content { vec![self.content.as_str()] } else { vec!("") }
+        } else { raw_lines };
 
         let start_line = self.scroll_line;
-        let end_line = (start_line + self.height as usize).min(lines.len());
+        let end_line = (start_line + self.height as usize).min(lines.len().max(1));
 
         let mut result_lines = Vec::new();
         for line_idx in start_line..end_line {
-            let line_str = lines[line_idx];
-            let start_col = self.scroll_col;
+            let line_str = if line_idx < lines.len() { lines[line_idx] } else { "" };
+            let start_col = self.scroll_col.min(line_str.len());
             let end_col = (start_col + self.width as usize).min(line_str.len());
             let visible_line = &line_str[start_col..end_col];
             result_lines.push(visible_line.to_string());
         }
 
-        // If no lines were added but we have content, add at least one line
-        if result_lines.is_empty() && !lines.is_empty() {
-            let line_str = lines[0];
-            let start_col = self.scroll_col;
-            let end_col = (start_col + self.width as usize).min(line_str.len());
-            let visible_line = &line_str[start_col..end_col];
-            result_lines.push(visible_line.to_string());
-        }
-
+        if result_lines.is_empty() { result_lines.push(String::new()); }
         result_lines
     }
 
     /// Get line numbers for display
     pub fn line_numbers(&self) -> Vec<String> {
-        let lines: Vec<&str> = self.content.lines().collect();
-
-        // Handle single line case
-        let lines = if lines.is_empty() && !self.content.is_empty() {
-            vec![self.content.as_str()]
-        } else if lines.is_empty() {
-            vec![]
-        } else {
-            lines
-        };
+        let raw_lines: Vec<&str> = self.content.lines().collect();
+        let total_lines = if raw_lines.is_empty() { 1 } else { raw_lines.len() };
 
         let start_line = self.scroll_line;
-        let end_line = (start_line + self.height as usize).min(lines.len());
+        let visible_height = self.height as usize;
+        let end_line = (start_line + visible_height).min(total_lines);
 
-        (start_line..end_line)
-            .map(|i| format!("{:>4} ", i + 1))
-            .collect()
+        let mut line_numbers = Vec::new();
+        for i in start_line..end_line {
+            line_numbers.push(format!("{:>4} ", i + 1));
+        }
+
+        // Ensure we always show at least one line number for empty buffers
+        if line_numbers.is_empty() {
+            line_numbers.push(format!("{:>4} ", 1));
+        }
+
+        line_numbers
     }
 
     /// Move cursor up
@@ -215,7 +202,9 @@ impl TextBuffer {
     /// Move cursor down
     pub fn move_cursor_down(&mut self) {
         let lines: Vec<&str> = self.content.lines().collect();
-        let max_line = lines.len().saturating_sub(1);
+        let total_lines = if lines.is_empty() { 1 } else { lines.len() };
+        let max_line = total_lines.saturating_sub(1);
+        
         if self.cursor_line < max_line {
             self.cursor_line += 1;
             self.adjust_cursor_to_line_length();
@@ -254,31 +243,20 @@ impl TextBuffer {
 
     /// Insert character at cursor
     pub fn insert_char(&mut self, ch: char) {
-        let lines: Vec<&str> = self.content.lines().collect();
-        if self.cursor_line >= lines.len() {
-            return;
-        }
+        // Work with an owned line vector, ensuring at least one line exists
+        let mut lines: Vec<String> = self
+            .content
+            .lines()
+            .map(|s| s.to_string())
+            .collect();
+        if lines.is_empty() { lines.push(String::new()); }
 
-        let line = lines[self.cursor_line];
-        let before = &line[..self.cursor_col];
-        let after = &line[self.cursor_col..];
+        if self.cursor_line >= lines.len() { self.cursor_line = lines.len() - 1; }
+        let line = &mut lines[self.cursor_line];
+        if self.cursor_col > line.len() { self.cursor_col = line.len(); }
+        line.insert(self.cursor_col, ch);
 
-        let new_line = format!("{}{}{}", before, ch, after);
-
-        // Rebuild content
-        let mut new_content = String::new();
-        for (i, line) in lines.iter().enumerate() {
-            if i == self.cursor_line {
-                new_content.push_str(&new_line);
-            } else {
-                new_content.push_str(line);
-            }
-            if i < lines.len() - 1 {
-                new_content.push('\n');
-            }
-        }
-
-        self.content = new_content;
+        self.content = lines.join("\n");
         self.cursor_col += 1;
         self.modified = true;
         self.adjust_scroll();
@@ -286,99 +264,84 @@ impl TextBuffer {
 
     /// Delete character at cursor
     pub fn delete_char(&mut self) {
-        let lines: Vec<&str> = self.content.lines().collect();
-        if self.cursor_line >= lines.len() {
+        let mut lines: Vec<String> = self
+            .content
+            .lines()
+            .map(|s| s.to_string())
+            .collect();
+        if lines.is_empty() { lines.push(String::new()); }
+
+        if self.cursor_line >= lines.len() { return; }
+        let line_len = lines[self.cursor_line].len();
+
+        if self.cursor_col < line_len {
+            // Delete within the line
+            lines[self.cursor_line].remove(self.cursor_col);
+        } else if self.cursor_line + 1 < lines.len() {
+            // Join with next line
+            let next = lines.remove(self.cursor_line + 1);
+            lines[self.cursor_line].push_str(&next);
+        } else {
             return;
         }
 
-        let line = lines[self.cursor_line];
-        if self.cursor_col >= line.len() {
-            return;
-        }
-
-        let before = &line[..self.cursor_col];
-        let after = &line[self.cursor_col + 1..];
-
-        let new_line = format!("{}{}", before, after);
-
-        // Rebuild content
-        let mut new_content = String::new();
-        for (i, line) in lines.iter().enumerate() {
-            if i == self.cursor_line {
-                new_content.push_str(&new_line);
-            } else {
-                new_content.push_str(line);
-            }
-            if i < lines.len() - 1 {
-                new_content.push('\n');
-            }
-        }
-
-        self.content = new_content;
+        self.content = lines.join("\n");
         self.modified = true;
     }
 
     /// Delete character before cursor
     pub fn backspace(&mut self) {
+        let mut lines: Vec<String> = self
+            .content
+            .lines()
+            .map(|s| s.to_string())
+            .collect();
+        if lines.is_empty() { lines.push(String::new()); }
+
+        if self.cursor_line >= lines.len() { return; }
+
         if self.cursor_col > 0 {
-            let lines: Vec<&str> = self.content.lines().collect();
-            if self.cursor_line >= lines.len() {
-                return;
+            // Remove character before cursor
+            if self.cursor_col <= lines[self.cursor_line].len() {
+                lines[self.cursor_line].remove(self.cursor_col - 1);
+                self.cursor_col -= 1;
             }
-
-            let line = lines[self.cursor_line];
-            let before = &line[..self.cursor_col - 1];
-            let after = &line[self.cursor_col..];
-
-            let new_line = format!("{}{}", before, after);
-
-            // Rebuild content
-            let mut new_content = String::new();
-            for (i, line) in lines.iter().enumerate() {
-                if i == self.cursor_line {
-                    new_content.push_str(&new_line);
-                } else {
-                    new_content.push_str(line);
-                }
-                if i < lines.len() - 1 {
-                    new_content.push('\n');
-                }
-            }
-
-            self.content = new_content;
-            self.cursor_col -= 1;
-            self.modified = true;
-            self.adjust_scroll();
+        } else if self.cursor_line > 0 {
+            // Merge with previous line
+            let current = lines.remove(self.cursor_line);
+            self.cursor_line -= 1;
+            let prev_len = lines[self.cursor_line].len();
+            lines[self.cursor_line].push_str(&current);
+            self.cursor_col = prev_len;
+        } else {
+            // At start of first line: nothing to do
+            return;
         }
+
+        self.content = lines.join("\n");
+        self.modified = true;
+        self.adjust_scroll();
     }
 
     /// Insert newline at cursor
     pub fn insert_newline(&mut self) {
-        let lines: Vec<&str> = self.content.lines().collect();
-        if self.cursor_line >= lines.len() {
-            return;
-        }
+        let mut lines: Vec<String> = self
+            .content
+            .lines()
+            .map(|s| s.to_string())
+            .collect();
+        if lines.is_empty() { lines.push(String::new()); }
 
-        let line = lines[self.cursor_line];
-        let before = &line[..self.cursor_col];
-        let after = &line[self.cursor_col..];
+        if self.cursor_line >= lines.len() { self.cursor_line = lines.len() - 1; }
+        let current = lines[self.cursor_line].clone();
+        let split_at = self.cursor_col.min(current.len());
+        let before = current[..split_at].to_string();
+        let after = current[split_at..].to_string();
 
-        // Rebuild content
-        let mut new_content = String::new();
-        for (i, line) in lines.iter().enumerate() {
-            if i == self.cursor_line {
-                new_content.push_str(before);
-                new_content.push('\n');
-                new_content.push_str(after);
-            } else {
-                new_content.push_str(line);
-            }
-            if i < lines.len() - 1 || i == self.cursor_line {
-                new_content.push('\n');
-            }
-        }
+        lines[self.cursor_line] = before;
+        lines.insert(self.cursor_line + 1, after);
 
-        self.content = new_content;
+        self.content = lines.join("\n");
         self.cursor_line += 1;
         self.cursor_col = 0;
         self.modified = true;
@@ -388,7 +351,10 @@ impl TextBuffer {
     /// Get current line length
     fn current_line_length(&self) -> usize {
         let lines: Vec<&str> = self.content.lines().collect();
-        if self.cursor_line < lines.len() {
+        if lines.is_empty() {
+            // Empty buffer acts as one empty line
+            if self.cursor_line == 0 { self.content.len() } else { 0 }
+        } else if self.cursor_line < lines.len() {
             lines[self.cursor_line].len()
         } else {
             0
@@ -424,7 +390,7 @@ impl TextBuffer {
     }
 
     /// Get buffer status string
-    pub fn status(&self, config: &EditorSettings) -> String {
+    pub fn status(&self, _config: &EditorSettings) -> String {
         let file_name = self
             .file_path
             .as_ref()
@@ -432,10 +398,16 @@ impl TextBuffer {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "[No Name]".to_string());
 
-        let modified_indicator = if self.modified { "[+]" } else { "" };
+        let modified_indicator = if self.modified { " [+]" } else { "" };
         let line_info = format!("{}:{}", self.cursor_line + 1, self.cursor_col + 1);
-
-        format!("{} {}    {}", file_name, modified_indicator, line_info)
+        
+        // Calculate total lines for display
+        let lines_count = if self.content.is_empty() { 1 } else { 
+            let line_count = self.content.lines().count();
+            if line_count == 0 { 1 } else { line_count }
+        };
+        
+        format!("{}{} - {}/{} lines", file_name, modified_indicator, line_info, lines_count)
     }
 }
 
